@@ -1,0 +1,1 @@
+## a ideiaé criar um dash board de people analystic para o rh da empprsa usando streamlit, com gráficos e tabelas interativas para análise de dados de funcionários, como desempenho, engajamento, rotatividade e outros indicadores importantes. O objetivo é fornecer insights valiosos para a tomada de decisões estratégicas no gerenciamento de pessoas. coomo comecaria
