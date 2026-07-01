@@ -1,0 +1,94 @@
+/* Customização global do Dashboard de People Analytics */
+
+:root {
+    --azul-principal: #28275a;
+    --laranja-destaque: #d5741b;
+    --cinza-claro: #f8f9fa;
+}
+
+/* 1. Estilização dos Cards de Métricas (st.metric) */
+[data-testid="stMetricValue"] {
+    color: var(--azul-principal) !important;
+    font-size: 2rem !important;
+    font-weight: 700 !important;
+}
+
+[data-testid="stMetricLabel"] {
+    color: #6c757d !important;
+    font-weight: 500 !important;
+    text-transform: uppercase;
+    font-size: 0.85rem !important;
+}
+
+/* 2. Estilizando os containers/blocos (border=True) */
+[data-testid="element-container"] div[data-testid="stVerticalBlockBorderWrapper"] {
+    border-left: 5px solid var(--laranja-destaque) !important; /* Detalhe laranja na lateral dos cards */
+    border-radius: 8px !important;
+    background-color: var(--cinza-claro);
+}
+
+/* 3. Customização dos Botões de Download */
+div.stDownloadButton > button {
+    background-color: var(--azul-principal) !important;
+    color: white !important;
+    border-radius: 6px !important;
+    border: none !important;
+    transition: all 0.3s ease;
+}
+
+div.stDownloadButton > button:hover {
+    background-color: var(--laranja-destaque) !important;
+    color: white !important;
+    transform: scale(1.02);
+}
+
+/* 4. Títulos com destaque */
+h1, h2, h3 {
+    color: var(--azul-principal) !important;
+}
+
+/* 5. Fundo branco para todo o app */
+body, .stApp, .main, .block-container {
+    background-color: #ffffff !important;
+}
+
+/* Ajuste para containers internos (cards etc.) para fundo branco */
+[data-testid="element-container"] div[data-testid="stVerticalBlockBorderWrapper"] {
+    background-color: #ffffff !important;
+}
+
+/* 6. Estilização dos Filtros - Laranja como cor principal */
+.stMultiSelect, .stSelectbox {
+    background-color: #ffffff !important;
+}
+
+.stMultiSelect > div > div {
+    background-color: var(--laranja-destaque) !important;
+    border-color: var(--laranja-destaque) !important;
+}
+
+/* Remover qualquer cor vermelha do estado padrão e usar laranja */
+[data-testid="stMultiSelect"] {
+    border-color: var(--laranja-destaque) !important;
+}
+
+
+/* Altera a cor do texto da aba ativa (Selecionada) */
+.stTabs [data-baseweb="tab"][aria-selected="true"] {
+    color: #d5741b !important;
+}
+
+.stTabs [data-baseweb="tab"][aria-selected="true"] p {
+    color: #d5741b !important;
+    font-weight: bold !important;
+}
+
+/* Altera a linha horizontal que corre embaixo da aba ativa */
+.stTabs [data-baseweb="tab-highlight-id"] {
+    background-color: #d5741b !important;
+}
+
+/* Efeito Hover: muda de cor sutilmente ao passar o mouse */
+.stTabs [data-baseweb="tab"]:hover p {
+    color: #ff9233 !important;
+}
