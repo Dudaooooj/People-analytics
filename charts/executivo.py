@@ -126,55 +126,88 @@ def renderizar_painel_executivo(df):
 
     st.markdown("---")
 
-    # 3. SEÇÃO: DISTRIBUIÇÕES (LADO A LADO)
-    st.subheader(" Distribuições")
+    # 3. SEÇÃO: DISTRIBUIÇÕES (FILTRADO APENAS ATIVOS / TRABALHANDO)
+    st.subheader("Distribuições")
     col_dist1, col_dist2 = st.columns(2)
     
+    # Criando uma máscara para garantir que estamos olhando apenas para quem está na operação
+    if situacao_col:
+        df_ativos_dist = df[situacao_series.isin(["ativo", "ferias", "afastado"])].copy()
+    else:
+        df_ativos_dist = df.copy() # Fallback caso a coluna não exista
+
     with col_dist1:
-        if salario_col and 'salarios' in locals() and not salarios.dropna().empty:
-            fig_sal = px.histogram(
-                salarios.dropna(), 
-                nbins=25, 
-                labels={"value": "Salário (R$)", "count": "Frequência"}, 
-                title="Distribuição Salarial", 
-                template="plotly_white", 
-                color_discrete_sequence=[AZUL_PRINCIPAL] # Aplicado Azul Principal
-            )
-            fig_sal.update_layout(
-                paper_bgcolor=BRANCO, 
-                plot_bgcolor=BRANCO,
-                height=350,
-                showlegend=False,
-                margin=dict(l=40, r=20, t=40, b=40)
-            )
-            st.plotly_chart(fig_sal, width="stretch")
+        if salario_col and 'salarios' in locals():
+            # Filtramos os salários apenas da base de funcionários ativos
+            salarios_ativos = pd.to_numeric(df_ativos_dist[salario_col], errors="coerce").dropna()
+            
+            if not salarios_ativos.empty:
+                fig_sal = px.histogram(
+                    salarios_ativos, 
+                    nbins=25, 
+                    labels={"value": "Salário (R$)", "count": "Frequência"}, 
+                    title="Distribuição Salarial (Apenas Ativos)", 
+                    template="plotly_white", 
+                    color_discrete_sequence=[AZUL_PRINCIPAL],
+                    text_auto=True
+                )
+                fig_sal.update_traces(
+                    textposition="outside",
+                    cliponaxis=False
+                )
+                fig_sal.update_layout(
+                    paper_bgcolor=BRANCO, 
+                    plot_bgcolor=BRANCO,
+                    height=380,
+                    showlegend=False,
+                    margin=dict(l=40, r=20, t=80, b=40),
+                    title_pad=dict(b=20)
+                )
+                st.plotly_chart(fig_sal, width="stretch")
+            else:
+                st.info("Dados de salário de colaboradores ativos insuficientes.")
         else:
             st.info("Dados de salário insuficientes.")
 
     with col_dist2:
-        if not tenure_series.empty:
-            fig_tempo = px.histogram(
-                tenure_series, 
-                nbins=20, 
-                labels={"value": "Tempo (Anos)", "count": "Frequência"}, 
-                title="Distribuição de Tempo de Empresa", 
-                template="plotly_white", 
-                color_discrete_sequence=[LARANJA_DESTAQUE] # Aplicado Laranja Destaque
-            )
-            fig_tempo.update_layout(
-                paper_bgcolor=BRANCO, 
-                plot_bgcolor=BRANCO,
-                height=350,
-                showlegend=False,
-                margin=dict(l=40, r=20, t=40, b=40)
-            )
-            st.plotly_chart(fig_tempo, width="stretch")
+        if adm_col_real:
+            # Recalculamos o tempo de empresa considerando apenas os funcionários ativos
+            hoje = pd.to_datetime("today")
+            adm_dates_at = df_ativos_dist[adm_col_real]
+            dem_dates_at = df_ativos_dist[dem_col_real] if dem_col_real else pd.Series(pd.NaT, index=df_ativos_dist.index)
+            
+            tenure_days_at = (dem_dates_at.fillna(hoje) - adm_dates_at).dt.days
+            tenure_years_at = (tenure_days_at / 365.25).dropna()
+            
+            if not tenure_years_at.empty:
+                fig_tempo = px.histogram(
+                    tenure_years_at, 
+                    nbins=20, 
+                    labels={"value": "Tempo (Anos)", "count": "Frequência"}, 
+                    title="Distribuição de Tempo de Empresa (Apenas Ativos)", 
+                    template="plotly_white", 
+                    color_discrete_sequence=[LARANJA_DESTAQUE],
+                    text_auto=True
+                )
+                fig_tempo.update_traces(
+                    textposition="outside",
+                    cliponaxis=False
+                )
+                fig_tempo.update_layout(
+                    paper_bgcolor=BRANCO, 
+                    plot_bgcolor=BRANCO,
+                    height=380,
+                    showlegend=False,
+                    margin=dict(l=40, r=20, t=80, b=40),
+                    title_pad=dict(b=20)
+                )
+                st.plotly_chart(fig_tempo, width="stretch")
+            else:
+                st.info("Dados de tempo de empresa de colaboradores ativos insuficientes.")
         else:
             st.info("Dados de tempo de empresa insuficientes.")
-
     st.markdown("---")
 
-    # 4. SEÇÃO: ESTRUTURA ORGANIZACIONAL (Usa a paleta sequencial do projeto)
     # 4. SEÇÃO: ESTRUTURA ORGANIZACIONAL (Usa a paleta sequencial do projeto)
     st.subheader("Estrutura Organizacional")
     col_org1, col_org2 = st.columns(2)
@@ -223,7 +256,6 @@ def renderizar_painel_executivo(df):
             df_cargo = df_cargo.str.replace("ÇÃO", "CAO", regex=True)
             df_cargo = df_cargo.str.replace("Ã", "A", regex=True)
             
-            # CORREÇÃO CRÍTICA AQUI: Adicionado o .str antes do .lower()
             df_cargo = df_cargo[(df_cargo != "") & (df_cargo.str.lower() != "nan")]
             
             df_cc = df_cargo.value_counts().reset_index(name="Quantidade")
@@ -240,14 +272,20 @@ def renderizar_painel_executivo(df):
                 y="Cargo", 
                 orientation="h", 
                 title="Principais Cargos", 
-                template="plotly_white"
+                template="plotly_white",
+                text="Quantidade" # ADICIONADO: Ativa o rótulo de dados na barra horizontal
             )
-            fig_cargo.update_traces(marker_color=colors_cargo)
+            fig_cargo.update_traces(
+                marker_color=colors_cargo,
+                textposition="outside", # ADICIONADO: Garante o número do lado de fora da barra
+                cliponaxis=False        # ADICIONADO: Impede cortes no texto final
+            )
             fig_cargo.update_layout(
                 paper_bgcolor=BRANCO, 
                 plot_bgcolor=BRANCO, 
                 height=380,
-                margin=dict(l=180, r=20, t=40, b=40), 
+                margin=dict(l=180, r=40, t=80, b=40), # CORRIGIDO: Expandido 't' para 80 e 'r' para 40
+                title_pad=dict(b=20),                # ADICIONADO: Afasta o título das barras
                 xaxis_title="Quantidade",
                 yaxis_title=None
             )
@@ -257,6 +295,7 @@ def renderizar_painel_executivo(df):
     st.markdown("---")
 
     # 5. SEÇÃO: MOVIMENTAÇÃO AO LONGO DO TEMPO (Mapeamento explícito de Admissões/Demissões)
+    # 5. SEÇÃO: MOVIMENTAÇÃO AO LONGO DO TEMPO (Com cálculo dinâmico de Turnover Geral)
     st.subheader("Movimentação ao Longo do Tempo")
     
     admissoes_no_tempo = pd.DataFrame(columns=["Mes_Ano", "Admissões"])
@@ -276,26 +315,76 @@ def renderizar_painel_executivo(df):
         movimentacao = pd.merge(admissoes_no_tempo, demissoes_no_tempo, on="Mes_Ano", how="outer").fillna(0)
         movimentacao = movimentacao.sort_values("Mes_Ano")
         
+        # --- APLICAÇÃO DA FÓRMULA DO TURNOVER MÊS A MÊS ---
+        # Formula: (([Admissões] + [Demissões]) / 2) / Total de Colaboradores
+        # Multiplicamos por 100 para exibir em formato percentual amigável no gráfico
+        if total_colaboradores > 0:
+            movimentacao["Turnover (%)"] = (
+                ((movimentacao["Admissões"] + movimentacao["Demissões"]) / 2) / total_colaboradores
+            ) * 100
+        else:
+            movimentacao["Turnover (%)"] = 0
+
+        # Criando o gráfico base com as linhas de volumes (Admissões e Demissões)
         fig = px.line(
             movimentacao, 
             x="Mes_Ano", 
             y=["Admissões", "Demissões"],
-            labels={"value": "Quantidade", "Mes_Ano": "Período (Mês/Ano)", "variable": "Movimentação"},
+            labels={"value": "Quantidade (Eixo Esq.)", "Mes_Ano": "Período (Mês/Ano)", "variable": "Movimentação"},
             color_discrete_map={
-                "Admissões": MAPA_CORES_SITUACAO["ativo"],      
-                "Demissões": MAPA_CORES_SITUACAO["desligado"]   
+                "Admissões": AZUL_PRINCIPAL,      
+                "Demissões": "#ff4b33" # Um tom de laranja mais claro para diferenciar da linha de Turnover
             },
             markers=True,
-            title="Linha Admissão x Demissão"
+            title="Linha Histórica: Admissões x Demissões x Taxa de Turnover"
         )
+
+        # Injetando a terceira linha (Turnover Geral) associada a um Eixo Y Secundário
+        import plotly.graph_objects as go
+        
+        fig.add_trace(
+            go.Scatter(
+                x=movimentacao["Mes_Ano"],
+                y=movimentacao["Turnover (%)"],
+                name="Turnover Geral (%)",
+                mode="lines+markers",
+                line=dict(color=LARANJA_DESTAQUE, width=3, dash="dash"), # Linha tracejada laranja padrão do projeto
+                marker=dict(size=6),
+                yaxis="y2" # Direciona para o eixo secundário da direita
+            )
+        )
+
+        # Configurando o Layout para suportar os dois eixos independentes de forma limpa
+        # Configurando o Layout para suportar os dois eixos independentes de forma limpa
         fig.update_layout(
             hovermode="x unified", 
             legend_orientation="h", 
-            legend_y=1.1, 
+            legend_y=1.15, 
             paper_bgcolor=BRANCO, 
             plot_bgcolor=BRANCO,
-            height=400
+            height=450,
+            # Eixo Y Original (Esquerda) - Quantidades absolutas
+            yaxis=dict(
+                title=dict(
+                    text="Quantidade de Colaboradores",
+                    font=dict(color=AZUL_PRINCIPAL) # CORREÇÃO: Estrutura correta para a fonte do título
+                ),
+                tickfont=dict(color=AZUL_PRINCIPAL)
+            ),
+            # Novo Eixo Y Secundário (Direita) - Porcentagem de Turnover
+            yaxis2=dict(
+                title=dict(
+                    text="Taxa de Turnover (%)",
+                    font=dict(color=LARANJA_DESTAQUE) # CORREÇÃO: Estrutura correta para a fonte do título
+                ),
+                tickfont=dict(color=LARANJA_DESTAQUE),
+                anchor="x",
+                overlaying="y",
+                side="right",
+                ticksuffix="%"
+            )
         )
+        
         fig.update_traces(marker=dict(line=dict(width=0)))
         st.plotly_chart(fig, width="stretch")
     else:

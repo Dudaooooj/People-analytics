@@ -20,10 +20,37 @@ with open("assets/style.css") as f:
 
 st.sidebar.image(logo_empresa, width=150)
 # 2. Carregar e consolidar os dados das 3 empresas
+
+st.sidebar.markdown("### 📥 Atualizar Base de Dados")
+arquivo_importado = st.sidebar.file_uploader(
+    "Importar planilha de funcionários atualizada",
+    type=["xlsx", "xls", "csv"],
+    help="Arraste o novo relatório do sistema de RH aqui para atualizar os gráficos."
+)
+
+# 2. Carregar os dados (Se houver arquivo importado, lê ele; senão, carrega a base padrão)
+if arquivo_importado is not None:
+    try:
+        # Verifica a extensão para ler corretamente
+        if arquivo_importado.name.endswith('.csv'):
+            df_total = pd.read_csv(arquivo_importado)
+        else:
+            df_total = pd.read_excel(arquivo_importado)
+            
+        st.sidebar.success("✅ Nova base importada com sucesso!")
+    except Exception as e:
+        st.sidebar.error(f"Erro ao ler o arquivo: {e}")
+        df_total = carregar_dados_consolidados() # Fallback em caso de erro
+else:
+    # Se o RH não subiu nada, carrega o banco de dados padrão do projeto
+    df_total = carregar_dados_consolidados()
+
+
+df_filtrado = renderizar_sidebar(df_total)
+
 df_total = carregar_dados_consolidados()
 
 # 3. Aplicar componentes de filtro na barra lateral (Empresa, Status, etc.)
-df_filtrado = renderizar_sidebar(df_total)
 
 
 # 4. Menu de Navegação Principal

@@ -44,15 +44,16 @@ def renderizar_analise_demografica(df):
                     title="Distribuição de Idades (Histograma)",
                     template="plotly_white",
                     color_discrete_sequence=[AZUL_PRINCIPAL],
-                    labels={col_idade: "Idade (Anos)", "count": "Nº de Colaboradores"}
+                    labels={col_idade: "Idade (Anos)", "count": "Nº de Colaboradores"},
+                    text_auto=True # Coloca os dados automaticamente
                 )
+                fig_idade.update_traces(textposition="outside", cliponaxis=False)
                 fig_idade.update_layout(yaxis_title="Nº de Colaboradores")
             else:
                 df_idade = df[col_idade].value_counts().reset_index(name="Quantidade")
                 df_idade.columns = [col_idade, "Quantidade"]
                 df_idade = df_idade.sort_values(by="Quantidade", ascending=True)
                 
-                # Destacar dinamicamente a maior barra
                 max_val = df_idade["Quantidade"].max()
                 cores_idade = [LARANJA_DESTAQUE if q == max_val else AZUL_PRINCIPAL for q in df_idade["Quantidade"]]
                 
@@ -63,12 +64,18 @@ def renderizar_analise_demografica(df):
                     orientation="h",
                     title="Distribuição por Faixa Etária",
                     template="plotly_white",
+                    text="Quantidade", # Ativa o número na barra horizontal
                     labels={col_idade: "Faixa Etária", "Quantidade": "Nº de Colaboradores"}
                 )
-                fig_idade.update_traces(marker_color=cores_idade)
-                fig_idade.update_layout(margin=dict(l=120, r=20, t=40, b=40))
+                fig_idade.update_traces(marker_color=cores_idade, textposition="outside", cliponaxis=False)
             
-            fig_idade.update_layout(paper_bgcolor=BRANCO, plot_bgcolor=BRANCO, height=350)
+            fig_idade.update_layout(
+                paper_bgcolor=BRANCO, 
+                plot_bgcolor=BRANCO, 
+                height=380,
+                margin=dict(l=120, r=40, t=80, b=40), # Espaço superior 't' aumentado para o título
+                title_pad=dict(b=20) # Distanciamento do título
+            )
             st.plotly_chart(fig_idade, width="stretch")
         else:
             st.info("Coluna de Idade não encontrada na base.")
@@ -88,7 +95,6 @@ def renderizar_analise_demografica(df):
             df_cc.columns = [col_esc, "Quantidade"]
             df_cc = df_cc.sort_values(by="Quantidade", ascending=True)
             
-            # Destacar dinamicamente a maior barra
             max_val = df_cc["Quantidade"].max()
             cores_esc = [LARANJA_DESTAQUE if q == max_val else AZUL_PRINCIPAL for q in df_cc["Quantidade"]]
             
@@ -99,14 +105,16 @@ def renderizar_analise_demografica(df):
                 orientation="h",
                 title="Nível de Formação",
                 template="plotly_white",
+                text="Quantidade", # Ativa o número na barra horizontal
                 labels={col_esc: "Graduação", "Quantidade": "Nº de Colaboradores"}
             )
-            fig_esc.update_traces(marker_color=cores_esc)
+            fig_esc.update_traces(marker_color=cores_esc, textposition="outside", cliponaxis=False)
             fig_esc.update_layout(
                 paper_bgcolor=BRANCO, 
                 plot_bgcolor=BRANCO, 
-                height=350,
-                margin=dict(l=150, r=20, t=40, b=40)
+                height=380,
+                margin=dict(l=150, r=40, t=80, b=40), # Margens ajustadas
+                title_pad=dict(b=20)
             )
             st.plotly_chart(fig_esc, width="stretch")
         else:
@@ -134,7 +142,6 @@ def renderizar_analise_demografica(df):
             df_rcc.columns = [col_raca, "Quantidade"]
             df_rcc = df_rcc.sort_values(by="Quantidade", ascending=True)
             
-            # Destacar dinamicamente a maior barra
             max_val = df_rcc["Quantidade"].max()
             cores_raca = [LARANJA_DESTAQUE if q == max_val else AZUL_PRINCIPAL for q in df_rcc["Quantidade"]]
             
@@ -145,14 +152,16 @@ def renderizar_analise_demografica(df):
                 orientation="h",
                 title="Distribuição por Raça / Etnia",
                 template="plotly_white",
+                text="Quantidade", # Ativa o número na barra horizontal
                 labels={col_raca: "Raça / Cor", "Quantidade": "Nº de Colaboradores"}
             )
-            fig_raca.update_traces(marker_color=cores_raca)
+            fig_raca.update_traces(marker_color=cores_raca, textposition="outside", cliponaxis=False)
             fig_raca.update_layout(
                 paper_bgcolor=BRANCO,
                 plot_bgcolor=BRANCO,
-                height=350,
-                margin=dict(l=120, r=20, t=40, b=40)
+                height=380,
+                margin=dict(l=120, r=40, t=80, b=40),
+                title_pad=dict(b=20)
             )
             st.plotly_chart(fig_raca, width="stretch")
         else:
@@ -173,7 +182,6 @@ def renderizar_analise_demografica(df):
             df_cvc.columns = [col_civil, "Quantidade"]
             df_cvc = df_cvc.sort_values(by="Quantidade", ascending=True)
             
-            # Destacar dinamicamente a maior barra
             max_val = df_cvc["Quantidade"].max()
             cores_civil = [LARANJA_DESTAQUE if q == max_val else AZUL_PRINCIPAL for q in df_cvc["Quantidade"]]
             
@@ -184,14 +192,16 @@ def renderizar_analise_demografica(df):
                 orientation="h",
                 title="Composição por Estado Civil",
                 template="plotly_white",
+                text="Quantidade", # Ativa o número na barra horizontal
                 labels={col_civil: "Estado Civil", "Quantidade": "Nº de Colaboradores"}
             )
-            fig_civil.update_traces(marker_color=cores_civil)
+            fig_civil.update_traces(marker_color=cores_civil, textposition="outside", cliponaxis=False)
             fig_civil.update_layout(
                 paper_bgcolor=BRANCO,
                 plot_bgcolor=BRANCO,
-                height=350,
-                margin=dict(l=120, r=20, t=40, b=40),
+                height=380,
+                margin=dict(l=120, r=40, t=80, b=40),
+                title_pad=dict(b=20),
                 yaxis_title=None
             )
             st.plotly_chart(fig_civil, width="stretch")
@@ -226,7 +236,9 @@ def renderizar_analise_demografica(df):
             )
             fig_sexo.update_layout(
                 paper_bgcolor=BRANCO, 
-                height=350,
+                height=380,
+                margin=dict(t=80, b=40),
+                title_pad=dict(b=20),
                 legend=dict(orientation="h", y=-0.1, x=0.2)
             )
             st.plotly_chart(fig_sexo, width="stretch")
@@ -244,7 +256,6 @@ def renderizar_analise_demografica(df):
             df_cid_count.columns = [col_cidade, "Quantidade"]
             df_cid_count = df_cid_count.head(8).sort_values(by="Quantidade", ascending=True)
             
-            # Destacar dinamicamente a maior barra
             max_val = df_cid_count["Quantidade"].max()
             cores_cidade = [LARANJA_DESTAQUE if q == max_val else AZUL_PRINCIPAL for q in df_cid_count["Quantidade"]]
             
@@ -255,14 +266,16 @@ def renderizar_analise_demografica(df):
                 orientation="h",
                 title="Top 8 Cidades com mais Colaboradores",
                 template="plotly_white",
+                text="Quantidade", # Ativa o número na barra horizontal
                 labels={col_cidade: "Cidade", "Quantidade": "Nº de Colaboradores"}
             )
-            fig_cid.update_traces(marker_color=cores_cidade)
+            fig_cid.update_traces(marker_color=cores_cidade, textposition="outside", cliponaxis=False)
             fig_cid.update_layout(
                 paper_bgcolor=BRANCO, 
                 plot_bgcolor=BRANCO, 
-                height=350,
-                margin=dict(l=120, r=20, t=40, b=40),
+                height=380,
+                margin=dict(l=120, r=40, t=80, b=40),
+                title_pad=dict(b=20),
                 yaxis_title=None
             )
             st.plotly_chart(fig_cid, width="stretch")
