@@ -2,9 +2,6 @@ import streamlit as st
 import plotly.express as px
 import pandas as pd
 
-# ============================================================
-# CONFIGURAÇÃO DE CORES (IDÊNTICO AO CORES.PY)
-# ============================================================
 AZUL_PRINCIPAL = "#28275a"
 LARANJA_DESTAQUE = "#d5741b"
 BRANCO = "#ffffff"

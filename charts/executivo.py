@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from pandas.tseries.offsets import MonthEnd
 
 # ============================================================
 # CONFIGURAÇÃO DE CORES (IDÊNTICO AO CORES.PY)
@@ -99,18 +100,46 @@ def renderizar_painel_executivo(df):
     # INTERFACE GRÁFICA REESTRUTURADA E PERSONALIZADA COM CORES
     # ============================================================
     
+    # ============================================================
+    # INTERFACE GRÁFICA REESTRUTURADA E PERSONALIZADA COM CORES
+    # ============================================================
+    
     st.markdown("---")
 
-    # 1. LINHA DE STATUS DO FUNCIONÁRIO (Com cores mapeadas)
+    # --- CÁLCULO DE PORCENTAGENS DOS KPIS ---
+    # Proteção de divisão por zero caso o dataframe venha completamente vazio
+    pct_ativos = (ativos / total_colaboradores * 100) if total_colaboradores > 0 else 0
+    pct_fora = (fora_operacao / total_colaboradores * 100) if total_colaboradores > 0 else 0
+    pct_desligados = (desligados / total_colaboradores * 100) if total_colaboradores > 0 else 0
+
+    # 1. LINHA DE STATUS DO FUNCIONÁRIO (Com cores mapeadas e deltas percentuais)
     col_t1, col_t2, col_t3, col_t4 = st.columns(4)
     with col_t1:
-        st.metric(label="Total Histórico", value=f"{total_colaboradores} colab.")
+        st.metric(
+            label="Total Histórico", 
+            value=f"{total_colaboradores} colab."
+        )
     with col_t2:
-        st.metric(label="🟢 Colaboradores Ativos", value=ativos)
+        st.metric(
+            label="🟢 Colaboradores Ativos", 
+            value=ativos,
+            delta=f"{pct_ativos:.1f}% da base",
+            delta_color="off" # Mantém o texto cinza neutro e profissional em vez de verde/vermelho de ações
+        )
     with col_t3:
-        st.metric(label="🟡 Em Férias / Afastados", value=fora_operacao)
+        st.metric(
+            label="🟡 Em Férias / Afastados", 
+            value=fora_operacao,
+            delta=f"{pct_fora:.1f}% da base",
+            delta_color="off"
+        )
     with col_t4:
-        st.metric(label="🔴 Total Desligados", value=desligados)
+        st.metric(
+            label="🔴 Total Desligados", 
+            value=desligados,
+            delta=f"{pct_desligados:.1f}% da base",
+            delta_color="off"
+        )
         
     st.markdown("---")
 
@@ -315,15 +344,28 @@ def renderizar_painel_executivo(df):
         movimentacao = pd.merge(admissoes_no_tempo, demissoes_no_tempo, on="Mes_Ano", how="outer").fillna(0)
         movimentacao = movimentacao.sort_values("Mes_Ano")
         
-        # --- APLICAÇÃO DA FÓRMULA DO TURNOVER MÊS A MÊS ---
-        # Formula: (([Admissões] + [Demissões]) / 2) / Total de Colaboradores
-        # Multiplicamos por 100 para exibir em formato percentual amigável no gráfico
-        if total_colaboradores > 0:
-            movimentacao["Turnover (%)"] = (
-                ((movimentacao["Admissões"] + movimentacao["Demissões"]) / 2) / total_colaboradores
-            ) * 100
-        else:
-            movimentacao["Turnover (%)"] = 0
+        # --- CÁLCULO DINÂMICO DO TOTAL DE ATIVOS EM CADA MÊS ---
+        # 1. Calculamos a variação líquida de cada mês (Entradas - Saídas)
+        movimentacao["Ativos_No_Mes"] = 0
+
+        for i, row in movimentacao.iterrows():
+
+            ultimo_dia = pd.to_datetime(row["Mes_Ano"]) + MonthEnd(1)
+
+            ativos = (
+                (df[adm_col_real] <= ultimo_dia) &
+                (
+                    df[dem_col_real].isna() |
+                    (df[dem_col_real] > ultimo_dia)
+                )
+            ).sum()
+
+            movimentacao.loc[i, "Ativos_No_Mes"] = ativos
+        
+        movimentacao["Turnover (%)"] = (
+            ((movimentacao["Admissões"] + movimentacao["Demissões"]) / 2)
+            / movimentacao["Ativos_No_Mes"]
+        ) * 100
 
         # Criando o gráfico base com as linhas de volumes (Admissões e Demissões)
         fig = px.line(
@@ -333,7 +375,7 @@ def renderizar_painel_executivo(df):
             labels={"value": "Quantidade (Eixo Esq.)", "Mes_Ano": "Período (Mês/Ano)", "variable": "Movimentação"},
             color_discrete_map={
                 "Admissões": AZUL_PRINCIPAL,      
-                "Demissões": "#ff4b33" # Um tom de laranja mais claro para diferenciar da linha de Turnover
+                "Demissões": "#4e54c8" # Um tom de laranja mais claro para diferenciar da linha de Turnover
             },
             markers=True,
             title="Linha Histórica: Admissões x Demissões x Taxa de Turnover"
