@@ -325,109 +325,106 @@ def renderizar_painel_executivo(df):
 
     # 5. SEÇÃO: MOVIMENTAÇÃO AO LONGO DO TEMPO (Mapeamento explícito de Admissões/Demissões)
     # 5. SEÇÃO: MOVIMENTAÇÃO AO LONGO DO TEMPO (Com cálculo dinâmico de Turnover Geral)
-    st.subheader("Movimentação ao Longo do Tempo")
+    # 1. PEGA OS STATUS QUE ESTÃO ATIVOS APÓS O FILTRO DA SIDEBAR
+    col_status_atual = "Status" if "Status" in df.columns else ("Situação" if "Situação" in df.columns else None)
     
-    admissoes_no_tempo = pd.DataFrame(columns=["Mes_Ano", "Admissões"])
-    demissoes_no_tempo = pd.DataFrame(columns=["Mes_Ano", "Demissões"])
+    status_presentes = df[col_status_atual].unique() if col_status_atual else []
 
-    if adm_col_real and not df[df[adm_col_real].notna()].empty:
-        df_adm = df[df[adm_col_real].notna()].copy()
-        df_adm["Mes_Ano"] = df_adm[adm_col_real].dt.strftime("%Y-%m")
-        admissoes_no_tempo = df_adm.groupby("Mes_Ano").size().reset_index(name="Admissões")
-    
-    if dem_col_real and not df[df[dem_col_real].notna()].empty:
-        df_dem = df[df[dem_col_real].notna()].copy()
-        df_dem["Mes_Ano"] = df_dem[dem_col_real].dt.strftime("%Y-%m")
-        demissoes_no_tempo = df_dem.groupby("Mes_Ano").size().reset_index(name="Demissões")
-    
-    if not admissoes_no_tempo.empty or not demissoes_no_tempo.empty:
-        movimentacao = pd.merge(admissoes_no_tempo, demissoes_no_tempo, on="Mes_Ano", how="outer").fillna(0)
-        movimentacao = movimentacao.sort_values("Mes_Ano")
+
+    if any(s in status_presentes for s in ["Trabalhando", "Desligado"]):
         
-        # --- CÁLCULO DINÂMICO DO TOTAL DE ATIVOS EM CADA MÊS ---
-        # 1. Calculamos a variação líquida de cada mês (Entradas - Saídas)
-        movimentacao["Ativos_No_Mes"] = 0
+        st.subheader("Movimentação ao Longo do Tempo")
+        
+        admissoes_no_tempo = pd.DataFrame(columns=["Mes_Ano", "Admissões"])
+        demissoes_no_tempo = pd.DataFrame(columns=["Mes_Ano", "Demissões"])
 
-        for i, row in movimentacao.iterrows():
+        if adm_col_real and not df[df[adm_col_real].notna()].empty:
+            df_adm = df[df[adm_col_real].notna()].copy()
+            df_adm["Mes_Ano"] = df_adm[adm_col_real].dt.strftime("%Y-%m")
+            admissoes_no_tempo = df_adm.groupby("Mes_Ano").size().reset_index(name="Admissões")
+        
+        if dem_col_real and not df[df[dem_col_real].notna()].empty:
+            df_dem = df[df[dem_col_real].notna()].copy()
+            df_dem["Mes_Ano"] = df_dem[dem_col_real].dt.strftime("%Y-%m")
+            demissoes_no_tempo = df_dem.groupby("Mes_Ano").size().reset_index(name="Demissões")
+        
+        # O bloco abaixo precisa checar se há dados E se a divisão por zero não vai quebrar
+        if (not admissoes_no_tempo.empty or not demissoes_no_tempo.empty):
+            movimentacao = pd.merge(admissoes_no_tempo, demissoes_no_tempo, on="Mes_Ano", how="outer").fillna(0)
+            movimentacao = movimentacao.sort_values("Mes_Ano")
+            
+            # --- CÁLCULO DINÂMICO DO TOTAL DE ATIVOS EM CADA MÊS ---
+            movimentacao["Ativos_No_Mes"] = 0
 
-            ultimo_dia = pd.to_datetime(row["Mes_Ano"]) + MonthEnd(1)
+            for i, row in movimentacao.iterrows():
+                ultimo_dia = pd.to_datetime(row["Mes_Ano"]) + MonthEnd(1)
+                ativos = (
+                    (df[adm_col_real] <= ultimo_dia) &
+                    (df[dem_col_real].isna() | (df[dem_col_real] > ultimo_dia))
+                ).sum()
+                movimentacao.loc[i, "Ativos_No_Mes"] = ativos
+            
+            # Evita divisão por zero se 'Ativos_No_Mes' for zero
+            movimentacao["Turnover (%)"] = movimentacao.apply(
+                lambda r: (((r["Admissões"] + r["Demissões"]) / 2) / r["Ativos_No_Mes"] * 100) if r["Ativos_No_Mes"] > 0 else 0, 
+                axis=1
+            )
 
-            ativos = (
-                (df[adm_col_real] <= ultimo_dia) &
-                (
-                    df[dem_col_real].isna() |
-                    (df[dem_col_real] > ultimo_dia)
+            # Criando o gráfico base com as linhas de volumes (Admissões e Demissões)
+            fig = px.line(
+                movimentacao, 
+                x="Mes_Ano", 
+                y=["Admissões", "Demissões"],
+                labels={"value": "Quantidade (Eixo Esq.)", "Mes_Ano": "Período (Mês/Ano)", "variable": "Movimentação"},
+                color_discrete_map={
+                    "Admissões": AZUL_PRINCIPAL,      
+                    "Demissões": "#4e54c8" 
+                },
+                markers=True,
+                title="Linha Histórica: Admissões x Demissões x Taxa de Turnover"
+            )
+
+            # Injetando a terceira linha (Turnover Geral) associada a um Eixo Y Secundário
+            import plotly.graph_objects as go
+            
+            fig.add_trace(
+                go.Scatter(
+                    x=movimentacao["Mes_Ano"],
+                    y=movimentacao["Turnover (%)"],
+                    name="Turnover Geral (%)",
+                    mode="lines+markers",
+                    line=dict(color=LARANJA_DESTAQUE, width=3, dash="dash"), 
+                    marker=dict(size=6),
+                    yaxis="y2" 
                 )
-            ).sum()
-
-            movimentacao.loc[i, "Ativos_No_Mes"] = ativos
-        
-        movimentacao["Turnover (%)"] = (
-            ((movimentacao["Admissões"] + movimentacao["Demissões"]) / 2)
-            / movimentacao["Ativos_No_Mes"]
-        ) * 100
-
-        # Criando o gráfico base com as linhas de volumes (Admissões e Demissões)
-        fig = px.line(
-            movimentacao, 
-            x="Mes_Ano", 
-            y=["Admissões", "Demissões"],
-            labels={"value": "Quantidade (Eixo Esq.)", "Mes_Ano": "Período (Mês/Ano)", "variable": "Movimentação"},
-            color_discrete_map={
-                "Admissões": AZUL_PRINCIPAL,      
-                "Demissões": "#4e54c8" # Um tom de laranja mais claro para diferenciar da linha de Turnover
-            },
-            markers=True,
-            title="Linha Histórica: Admissões x Demissões x Taxa de Turnover"
-        )
-
-        # Injetando a terceira linha (Turnover Geral) associada a um Eixo Y Secundário
-        import plotly.graph_objects as go
-        
-        fig.add_trace(
-            go.Scatter(
-                x=movimentacao["Mes_Ano"],
-                y=movimentacao["Turnover (%)"],
-                name="Turnover Geral (%)",
-                mode="lines+markers",
-                line=dict(color=LARANJA_DESTAQUE, width=3, dash="dash"), # Linha tracejada laranja padrão do projeto
-                marker=dict(size=6),
-                yaxis="y2" # Direciona para o eixo secundário da direita
             )
-        )
 
-        # Configurando o Layout para suportar os dois eixos independentes de forma limpa
-        # Configurando o Layout para suportar os dois eixos independentes de forma limpa
-        fig.update_layout(
-            hovermode="x unified", 
-            legend_orientation="h", 
-            legend_y=1.15, 
-            paper_bgcolor=BRANCO, 
-            plot_bgcolor=BRANCO,
-            height=450,
-            # Eixo Y Original (Esquerda) - Quantidades absolutas
-            yaxis=dict(
-                title=dict(
-                    text="Quantidade de Colaboradores",
-                    font=dict(color=AZUL_PRINCIPAL) # CORREÇÃO: Estrutura correta para a fonte do título
+            fig.update_layout(
+                hovermode="x unified", 
+                legend_orientation="h", 
+                legend_y=1.15, 
+                paper_bgcolor=BRANCO, 
+                plot_bgcolor=BRANCO,
+                height=450,
+                yaxis=dict(
+                    title=dict(text="Quantidade de Colaboradores", font=dict(color=AZUL_PRINCIPAL)),
+                    tickfont=dict(color=AZUL_PRINCIPAL)
                 ),
-                tickfont=dict(color=AZUL_PRINCIPAL)
-            ),
-            # Novo Eixo Y Secundário (Direita) - Porcentagem de Turnover
-            yaxis2=dict(
-                title=dict(
-                    text="Taxa de Turnover (%)",
-                    font=dict(color=LARANJA_DESTAQUE) # CORREÇÃO: Estrutura correta para a fonte do título
-                ),
-                tickfont=dict(color=LARANJA_DESTAQUE),
-                anchor="x",
-                overlaying="y",
-                side="right",
-                ticksuffix="%"
+                yaxis2=dict(
+                    title=dict(text="Taxa de Turnover (%)", font=dict(color=LARANJA_DESTAQUE)),
+                    tickfont=dict(color=LARANJA_DESTAQUE),
+                    anchor="x",
+                    overlaying="y",
+                    side="right",
+                    ticksuffix="%"
+                )
             )
-        )
-        
-        fig.update_traces(marker=dict(line=dict(width=0)))
-        st.plotly_chart(fig, width="stretch")
+            
+            fig.update_traces(marker=dict(line=dict(width=0)))
+            st.plotly_chart(fig, width="stretch") # Correção leve aqui de width para usar o padrão do streamlit
+        else:
+            st.warning("Sem dados históricos de datas suficientes para gerar a linha temporal.")
+            
     else:
-        st.warning("Sem dados históricos de datas suficientes para gerar a linha temporal.")
+        # Mensagem amigável opcional quando o gráfico estiver ocultado
+        st.info("O gráfico de movimentações histórica e Turnover é exibido apenas para filtros que incluam funcionários ativos 'Trabalhando' ou 'Desligados'.")
