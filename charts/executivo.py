@@ -243,87 +243,56 @@ def renderizar_painel_executivo(df):
     st.subheader("Estrutura Organizacional")
     col_org1, col_org2 = st.columns(2)
 
-    with col_org1:
-        gestor_col = _choose_column(df, ["Gestor direto", "Gestor", "Gestor Direto", "Gestor imediato"])
-        if gestor_col:
-            df_gestores = df[gestor_col].astype(str).str.strip()
-            df_gestores = df_gestores[(df_gestores != "") & (df_gestores.str.lower() != "nan")]
-            df_gcount = df_gestores.value_counts().reset_index(name="Total")
-            df_gcount.columns = ["Gestor", "Total"]
-            df_gcount = df_gcount.head(8).sort_values(by="Total", ascending=True)
-            
-            # Gera paleta do azul ao laranja para destacar o maior gestor
-            colors_gest = generate_palette(AZUL_PRINCIPAL, LARANJA_DESTAQUE, len(df_gcount))
-            
-            fig_gest = px.bar(
-                df_gcount, 
-                x="Total", 
-                y="Gestor", 
-                orientation="h", 
-                title="Top Gestores (Quantidade de Liderados)", 
-                template="plotly_white"
-            )
-            fig_gest.update_traces(marker_color=colors_gest)
-            fig_gest.update_layout(
-                paper_bgcolor=BRANCO, 
-                plot_bgcolor=BRANCO, 
-                height=380,
-                margin=dict(l=180, r=20, t=40, b=40), 
-                xaxis_title="Colaboradores",
-                yaxis_title=None
-            )
-            st.plotly_chart(fig_gest, width="stretch")
-        else:
-            st.info("Coluna de gestor não identificada.")
-
-    with col_org2:
-        cargo_col = _choose_column(df, ["Cargo", "CARGO", "Função", "Funcao", "nome cargo", "Nome Cargo", "Nome cargo"]) 
-        if cargo_col:
-            # --- LIMPEZA E PADRONIZAÇÃO AVANÇADA DE TEXTO ---
-            df_cargo = df[cargo_col].astype(str).str.strip().str.upper()
-            
-            # Remove acentuações comuns para unificar (MANUTENÇÃO -> MANUTENCAO)
-            df_cargo = df_cargo.str.replace("ÇÃO", "CAO", regex=True)
-            df_cargo = df_cargo.str.replace("Ã", "A", regex=True)
-            
-            df_cargo = df_cargo[(df_cargo != "") & (df_cargo.str.lower() != "nan")]
-            
-            df_cc = df_cargo.value_counts().reset_index(name="Quantidade")
-            df_cc.columns = ["Cargo", "Quantidade"]
-            
-            # Pega o top 8 e ordena do menor para o maior volume
-            df_cc = df_cc.head(8).sort_values(by="Quantidade", ascending=True)
-            
-            # Gera uma paleta que transita do azul ao laranja para os cargos
-            cores_degrade = generate_palette(AZUL_PRINCIPAL, LARANJA_DESTAQUE, len(df_cc))
-            cores_degrade.reverse()
-            
-            fig_cargo = px.bar(
-                df_cc, 
-                x="Quantidade", 
-                y="Cargo", 
-                orientation="h", 
-                title="Principais Cargos", 
-                template="plotly_white",
-                text="Quantidade" 
-            )
-            fig_cargo.update_traces(
-                marker_color=cores_degrade, # Aplica a lista de cores calculada
-                textposition="outside", 
-                cliponaxis=False        
-            )
-            fig_cargo.update_layout(
-                paper_bgcolor=BRANCO, 
-                plot_bgcolor=BRANCO, 
-                height=380,
-                margin=dict(l=180, r=40, t=80, b=40), 
-                title_pad=dict(b=20),                
-                xaxis_title="Quantidade de Colaboradores",
-                yaxis_title=None
-            )
-            st.plotly_chart(fig_cargo, width="stretch")
-        else:
-            st.info("Coluna de cargo não identificada.")
+    # --- GRÁFICO EM LARGURA TOTAL (SEM COLUNAS) ---
+    cargo_col = _choose_column(df, ["Cargo", "CARGO", "Função", "Funcao", "nome cargo", "Nome Cargo", "Nome cargo"]) 
+    
+    if cargo_col:
+        # --- LIMPEZA E PADRONIZAÇÃO AVANÇADA DE TEXTO ---
+        df_cargo = df[cargo_col].astype(str).str.strip().str.upper()
+        
+        # Remove acentuações comuns para unificar (MANUTENÇÃO -> MANUTENCAO)
+        df_cargo = df_cargo.str.replace("ÇÃO", "CAO", regex=True)
+        df_cargo = df_cargo.str.replace("Ã", "A", regex=True)
+        
+        df_cargo = df_cargo[(df_cargo != "") & (df_cargo.str.lower() != "nan")]
+        
+        df_cc = df_cargo.value_counts().reset_index(name="Quantidade")
+        df_cc.columns = ["Cargo", "Quantidade"]
+        
+        # Pega o top 8 e ordena do menor para o maior volume
+        df_cc = df_cc.head(8).sort_values(by="Quantidade", ascending=True)
+        
+        # Gera uma paleta que transita do azul ao laranja para os cargos
+        cores_degrade = generate_palette(AZUL_PRINCIPAL, LARANJA_DESTAQUE, len(df_cc))
+        cores_degrade.reverse()
+        
+        fig_cargo = px.bar(
+            df_cc, 
+            x="Quantidade", 
+            y="Cargo", 
+            orientation="h", 
+            title="Principais Cargos na Organização", 
+            template="plotly_white",
+            text="Quantidade" 
+        )
+        fig_cargo.update_traces(
+            marker_color=cores_degrade, 
+            textposition="outside", 
+            cliponaxis=False        
+        )
+        fig_cargo.update_layout(
+            paper_bgcolor=BRANCO, 
+            plot_bgcolor=BRANCO, 
+            height=420, # Aumentei ligeiramente a altura para aproveitar o espaço expandido
+            margin=dict(l=220, r=50, t=80, b=40), # Ajustado recuo esquerdo para nomes longos não cortarem
+            title_pad=dict(b=20),                
+            xaxis_title="Quantidade de Colaboradores",
+            yaxis_title=None
+        )
+        st.plotly_chart(fig_cargo, width="stretch")
+    else:
+        st.info("Coluna de cargo não identificada.")
+        
     st.markdown("---")
     # 5. SEÇÃO: MOVIMENTAÇÃO AO LONGO DO TEMPO (Com cálculo dinâmico de Turnover Geral)
     # 1. PEGA OS STATUS QUE ESTÃO ATIVOS APÓS O FILTRO DA SIDEBAR

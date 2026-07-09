@@ -65,85 +65,52 @@ def renderizar_estrutura_organizacional(df):
     # --- LINHA 2: GESTORES E CONTINGÊNCIA ---
     col3, col4 = st.columns(2)
 
-    with col3:
-        st.markdown("###  Análise de Span of Control (Liderados por Gestor)")
-        col_gestor = _choose_column(df, ["Gestor direto", "Gestor", "Gestor Direto", "Gestor imediato"])
+   # --- PAINEL DE CONTINGÊNCIA EM LARGURA TOTAL (SEM COLUNAS) ---
+    st.markdown("### Painel de Contingência (Férias e Afastados)")
+    
+    # Filtrar quem está fora da operação atual de forma tolerante a acentos
+    df_ausentes = df[df[col_situacao].isin(["férias", "ferias", "afastado"])]
+    
+    if col_setor and not df_ausentes.empty:
+        df_ausentes_setor = df_ausentes.groupby([col_setor, col_situacao]).size().reset_index()
         
-        if col_gestor:
-            # Filtrar apenas funcionários ativos para ver a carga real de liderança
-            df_ativos = df[df[col_situacao] == "ativo"]
-            df_liderança = df_ativos[col_gestor].astype(str).str.strip().value_counts().reset_index()
-            
-            # Forçar os nomes das colunas para evitar erros de índice do Pandas
-            df_liderança.columns = ["Gestor", "Total Liderados"]
-            df_liderança = df_liderança[(df_liderança["Gestor"] != "") & (df_liderança["Gestor"].str.lower() != "nan")]
-            df_liderança = df_liderança.head(10).sort_values(by="Total Liderados", ascending=True)
-            
-            fig_lideres = px.bar(
-                df_liderança,
-                x="Total Liderados",
-                y="Gestor",
-                orientation="h",
-                template="plotly_white",
-                color="Total Liderados",
-                color_continuous_scale=[AZUL_PRINCIPAL, LARANJA_DESTAQUE],
-                labels={"Total Liderados": "Quantidade de Liderados Diretos"}
-            )
-            fig_lideres.update_layout(
-                paper_bgcolor=BRANCO,
-                plot_bgcolor=BRANCO,
-                height=380,
-                coloraxis_showscale=False,
-                margin=dict(l=150, r=20, t=40, b=40),
-                yaxis_title=None
-            )
-            st.plotly_chart(fig_lideres, width="stretch")
-        else:
-            st.info("Coluna de Gestor direto não encontrada na base.")
-
-    with col4:
-        st.markdown("###  Painel de Contingência (Férias e Afastados)")
+        df_ausentes_setor.columns = ["Setor", "Situacao", "Quantidade"]
+        df_ausentes_setor = df_ausentes_setor.sort_values(by="Quantidade", ascending=True)
         
-        # Filtrar quem está fora da operação atual de forma tolerante a acentos
-        df_ausentes = df[df[col_situacao].isin(["férias", "ferias", "afastado"])]
+        # Como o gráfico agora é largo, expandi a sequência de cores de forma elegante
+        fig_ausentes = px.pie(
+            df_ausentes_setor,
+            names="Setor",
+            values="Quantidade",
+            hole=0.4,
+            template="plotly_white",
+            color_discrete_sequence=[LARANJA_DESTAQUE, AZUL_PRINCIPAL, "#4e54c8", "#e48f24"]
+        )
+        fig_ausentes.update_traces(
+            textinfo="value",
+            texttemplate="%{value}"
+        )
+        fig_ausentes.update_layout(
+            paper_bgcolor=BRANCO,
+            plot_bgcolor=BRANCO,
+            height=380,
+            # Centraliza a legenda horizontalmente abaixo do gráfico largo
+            legend=dict(orientation="h", y=-0.1, x=0.3)
+        )
+        st.plotly_chart(fig_ausentes, width="stretch")
         
-        if col_setor and not df_ausentes.empty:
-            df_ausentes_setor = df_ausentes.groupby([col_setor, col_situacao]).size().reset_index()
-            
-            df_ausentes_setor.columns = ["Setor", "Situacao", "Quantidade"]
-            df_ausentes_setor = df_ausentes_setor.sort_values(by="Quantidade", ascending=True)
-            
-            fig_ausentes = px.pie(
-                df_ausentes_setor,
-                names="Setor",
-                values="Quantidade",
-                hole=0.4,
-                template="plotly_white",
-                color_discrete_sequence=[LARANJA_DESTAQUE, AZUL_PRINCIPAL]
-            )
-            fig_ausentes.update_traces(
-                textinfo="value",
-                texttemplate="%{value}"
-            )
-            fig_ausentes.update_layout(
-                paper_bgcolor=BRANCO,
-                plot_bgcolor=BRANCO,
-                height=380,
-                legend=dict(orientation="h", y=-0.1, x=0.1)
-            )
-            st.plotly_chart(fig_ausentes, width="stretch")
-            
-            # Mini tabela de apoio corrigida para usar col_nome de forma dinâmica
-            st.caption("**Lista de Ausências Atuais:**")
-            colunas_exibicao = [col for col in [col_nome, col_setor, col_situacao, col_empresa] if col]
-            st.dataframe(
-                df_ausentes[colunas_exibicao], 
-                width=500, 
-                hide_index=True
-            )
-        else:
-            st.success("✅ Excelente! No momento, não há colaboradores em férias ou afastados na seleção atual.")
-
+        # Mini tabela de apoio corrigida para usar col_nome de forma dinâmica
+        st.caption("**Lista de Ausências Atuais:**")
+        colunas_exibicao = [col for col in [col_nome, col_setor, col_situacao, col_empresa] if col]
+        
+        # Mudamos o width para None para que a tabela também se ajuste à largura total de forma elegante
+        st.dataframe(
+        df_ausentes[colunas_exibicao], 
+        width="stretch", # Nova sintaxe padronizada para esticar a tabela
+        hide_index=True
+        )
+    else:
+        st.success("✅ Excelente! No momento, não há colaboradores em férias ou afastados na seleção atual.")
     st.markdown("---")
 
     # --- LINHA 3: COMPOSIÇÃO CORPORATIVA E TURNOVER ORGANIZACIONAL ---
