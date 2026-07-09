@@ -2,29 +2,18 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# ============================================================
-# CONFIGURAÇÃO DE CORES (IDÊNTICO AO CORES.PY)
-# ============================================================
-AZUL_PRINCIPAL = "#28275a"
-LARANJA_DESTAQUE = "#d5741b"
-BRANCO = "#ffffff"
-CINZA_CLARO = "#f8f9fa"
-CINZA_TEXTO = "#495057"
+from assets.cores import AZUL_PRINCIPAL, LARANJA_DESTAQUE, BRANCO, PALETA_PRINCIPAL, generate_palette
 
-PALETA_PRINCIPAL = [AZUL_PRINCIPAL, LARANJA_DESTAQUE, "#4e54c8", "#ff9233", "#7f7fd5"]
 
 def renderizar_analise_demografica(df):
     if df.empty:
         st.warning("Nenhum dado disponível para os filtros selecionados.")
         return
 
-    # --- ISOLAMENTO E LIMPEZA DE COLUNAS CRÍTICA ---
     df = df.copy()
     df.columns = df.columns.str.strip() # Remove espaços extras invisíveis das colunas
 
-    # ============================================================
     # LINHA 1: IDADE E GRAU DE INSTRUÇÃO
-    # ============================================================
     col1, col2 = st.columns(2)
 
     with col1:
@@ -36,26 +25,53 @@ def renderizar_analise_demografica(df):
                 break
         
         if col_idade:
+            # Importações necessárias para processar as faixas e cores
+            import numpy as np
+            import plotly.colors
+
+            # Mapeamento do gradiente azul para ciano
+            # Mapeamento do gradiente ligando o seu Azul diretamente ao seu Laranja
+            # Adicionei um tom intermediário (roxo/marrom discreto) para a transição não passar por um cinza morto
+            combinacao_azul_laranja = ["#28275a", "#5a3a5f", "#8d4e5a", "#bd6448", "#d5741b"]
+
             if pd.api.types.is_numeric_dtype(df[col_idade]):
-                fig_idade = px.histogram(
-                    df,
-                    x=col_idade,
-                    nbins=15,
-                    title="Distribuição de Idades (Histograma)",
-                    template="plotly_white",
-                    color_discrete_sequence=[AZUL_PRINCIPAL],
-                    labels={col_idade: "Idade (Anos)", "count": "Nº de Colaboradores"},
-                    text_auto=True # Coloca os dados automaticamente
-                )
-                fig_idade.update_traces(textposition="outside", cliponaxis=False)
-                fig_idade.update_layout(yaxis_title="Nº de Colaboradores")
+                idades_limpas = pd.to_numeric(df[col_idade], errors="coerce").dropna()
+                
+                if not idades_limpas.empty:
+                    # --- FAIXAS LIMPAS: De 5 em 5 anos ---
+                    min_idade = int(np.floor(idades_limpas.min() / 5) * 5)
+                    max_idade = int(np.ceil(idades_limpas.max() / 5) * 5)
+                    bins_custom_idade = list(range(min_idade, max_idade + 6, 5))
+                    
+                    bins_id = pd.cut(idades_limpas, bins=bins_custom_idade, right=False)
+                    df_idade_bar = bins_id.value_counts().sort_index().reset_index()
+                    df_idade_bar.columns = ["Intervalo", "Nº de Colaboradores"]
+                    
+                    df_idade_bar["Intervalo_Str"] = df_idade_bar["Intervalo"].apply(lambda x: f"{int(x.left)}-{int(x.right)}")
+                    
+                    # Amostra as cores ao longo da nova escala de transição Azul -> Laranja
+                    cores_idade = plotly.colors.sample_colorscale(combinacao_azul_laranja, len(df_idade_bar))
+
+                    fig_idade = px.bar(
+                        df_idade_bar,
+                        x="Intervalo_Str",
+                        y="Nº de Colaboradores",
+                        title="Distribuição de Idades (Histograma Padronizado)",
+                        template="plotly_white",
+                        color="Intervalo_Str", 
+                        color_discrete_sequence=cores_idade, # Aplica o degradê misto
+                        labels={"Intervalo_Str": "Idade (Anos)", "Nº de Colaboradores": "Nº de Colaboradores"},
+                        text_auto=True 
+                    )
+                else:
+                    fig_idade = None
             else:
+                # Caso a base de dados já venha com texto/faixas prontas (ex: "De 20 a 30 anos")
                 df_idade = df[col_idade].value_counts().reset_index(name="Quantidade")
                 df_idade.columns = [col_idade, "Quantidade"]
                 df_idade = df_idade.sort_values(by="Quantidade", ascending=True)
                 
-                max_val = df_idade["Quantidade"].max()
-                cores_idade = [LARANJA_DESTAQUE if q == max_val else AZUL_PRINCIPAL for q in df_idade["Quantidade"]]
+                cores_idade = plotly.colors.sample_colorscale(combinacao_azul_ciano, len(df_idade))
                 
                 fig_idade = px.bar(
                     df_idade,
@@ -64,22 +80,31 @@ def renderizar_analise_demografica(df):
                     orientation="h",
                     title="Distribuição por Faixa Etária",
                     template="plotly_white",
-                    text="Quantidade", # Ativa o número na barra horizontal
+                    color=col_idade,
+                    color_discrete_sequence=cores_idade,
+                    text="Quantidade", 
                     labels={col_idade: "Faixa Etária", "Quantidade": "Nº de Colaboradores"}
                 )
-                fig_idade.update_traces(marker_color=cores_idade, textposition="outside", cliponaxis=False)
             
-            fig_idade.update_layout(
-                paper_bgcolor=BRANCO, 
-                plot_bgcolor=BRANCO, 
-                height=380,
-                margin=dict(l=120, r=40, t=80, b=40), # Espaço superior 't' aumentado para o título
-                title_pad=dict(b=20) # Distanciamento do título
-            )
-            st.plotly_chart(fig_idade, width="stretch")
+            if fig_idade:
+                fig_idade.update_traces(textposition="outside", cliponaxis=False)
+                fig_idade.update_layout(
+                    paper_bgcolor=BRANCO, 
+                    plot_bgcolor=BRANCO, 
+                    height=380,
+                    showlegend=False, # Oculta a legenda repetitiva
+                    margin=dict(l=60, r=40, t=80, b=40), 
+                    title_pad=dict(b=20) 
+                )
+                if not pd.api.types.is_numeric_dtype(df[col_idade]):
+                    # Ajuste de margem caso o gráfico seja o horizontal textual
+                    fig_idade.update_layout(margin=dict(l=120, r=40, t=80, b=40))
+                
+                st.plotly_chart(fig_idade, width="stretch")
+            else:
+                st.info("Dados de idade insuficientes.")
         else:
             st.info("Coluna de Idade não encontrada na base.")
-
     with col2:
         st.markdown("### Nível de Formação")
         col_esc = None
@@ -95,8 +120,7 @@ def renderizar_analise_demografica(df):
             df_cc.columns = [col_esc, "Quantidade"]
             df_cc = df_cc.sort_values(by="Quantidade", ascending=True)
             
-            max_val = df_cc["Quantidade"].max()
-            cores_esc = [LARANJA_DESTAQUE if q == max_val else AZUL_PRINCIPAL for q in df_cc["Quantidade"]]
+            cores_esc = generate_palette(AZUL_PRINCIPAL, LARANJA_DESTAQUE, len(df_cc))
             
             fig_esc = px.bar(
                 df_cc,
@@ -142,8 +166,7 @@ def renderizar_analise_demografica(df):
             df_rcc.columns = [col_raca, "Quantidade"]
             df_rcc = df_rcc.sort_values(by="Quantidade", ascending=True)
             
-            max_val = df_rcc["Quantidade"].max()
-            cores_raca = [LARANJA_DESTAQUE if q == max_val else AZUL_PRINCIPAL for q in df_rcc["Quantidade"]]
+            cores_raca = generate_palette(AZUL_PRINCIPAL, LARANJA_DESTAQUE, len(df_rcc))
             
             fig_raca = px.bar(
                 df_rcc,
@@ -182,8 +205,7 @@ def renderizar_analise_demografica(df):
             df_cvc.columns = [col_civil, "Quantidade"]
             df_cvc = df_cvc.sort_values(by="Quantidade", ascending=True)
             
-            max_val = df_cvc["Quantidade"].max()
-            cores_civil = [LARANJA_DESTAQUE if q == max_val else AZUL_PRINCIPAL for q in df_cvc["Quantidade"]]
+            cores_civil = generate_palette(AZUL_PRINCIPAL, LARANJA_DESTAQUE, len(df_cvc))
             
             fig_civil = px.bar(
                 df_cvc,
@@ -230,10 +252,17 @@ def renderizar_analise_demografica(df):
                 names=col_sexo,
                 values="Quantidade",
                 hole=0.5,
-                title="Proporção por Sexo",
+                title="Distribuição por Sexo (Valores Absolutos)",
                 template="plotly_white",
                 color_discrete_sequence=[AZUL_PRINCIPAL, LARANJA_DESTAQUE]
             )
+            
+            # --- CONFIGURAÇÃO PARA EXIBIR NÚMEROS REAIS ---
+            fig_sexo.update_traces(
+                textinfo="value",  # Define para mostrar o valor bruto em vez de 'percent'
+                texttemplate="%{value}"  # Garante a formatação pura do número inteiro
+            )
+            
             fig_sexo.update_layout(
                 paper_bgcolor=BRANCO, 
                 height=380,
@@ -244,7 +273,6 @@ def renderizar_analise_demografica(df):
             st.plotly_chart(fig_sexo, width="stretch")
         else:
             st.info("Coluna de Sexo/Gênero não encontrada na base.")
-
     with col6:
         st.markdown("### Distribuição por Cidade")
         col_cidade = "Cidade" if "Cidade" in df.columns else "Cidade"
@@ -256,8 +284,7 @@ def renderizar_analise_demografica(df):
             df_cid_count.columns = [col_cidade, "Quantidade"]
             df_cid_count = df_cid_count.head(8).sort_values(by="Quantidade", ascending=True)
             
-            max_val = df_cid_count["Quantidade"].max()
-            cores_cidade = [LARANJA_DESTAQUE if q == max_val else AZUL_PRINCIPAL for q in df_cid_count["Quantidade"]]
+            cores_cidade = generate_palette(AZUL_PRINCIPAL, LARANJA_DESTAQUE, len(df_cid_count))
             
             fig_cid = px.bar(
                 df_cid_count,

@@ -3,25 +3,15 @@ import pandas as pd
 import plotly.express as px
 from pandas.tseries.offsets import MonthEnd
 
-# ============================================================
-# CONFIGURAÇÃO DE CORES (IDÊNTICO AO CORES.PY)
-# ============================================================
-AZUL_PRINCIPAL = "#28275a"
-LARANJA_DESTAQUE = "#d5741b"
-BRANCO = "#ffffff"
-CINZA_CLARO = "#f8f9fa"
-CINZA_TEXTO = "#495057"
-
-PALETA_PRINCIPAL = [AZUL_PRINCIPAL, LARANJA_DESTAQUE, "#4e54c8", "#ff9233", "#7f7fd5"]
+from assets.cores import AZUL_PRINCIPAL, LARANJA_DESTAQUE, BRANCO, generate_palette
 
 MAPA_CORES_SITUACAO = {
-    "ativo": "#28275a",       # Verde para ativo
-    "férias": "#f1c40f",      # Amarelo para férias
+    "ativo": AZUL_PRINCIPAL,
+    "férias": "#f1c40f",
     "ferias": "#f1c40f",
-    "afastado": LARANJA_DESTAQUE, # Laranja destaque para afastados
-    "desligado": "#d5741b"    # Vermelho para desligado
+    "afastado": LARANJA_DESTAQUE,
+    "desligado": LARANJA_DESTAQUE
 }
-
 
 def _choose_column(df, candidates):
     for c in candidates:
@@ -45,14 +35,11 @@ def _normalize_status(val: str) -> str:
     return "outro"
 
 def renderizar_painel_executivo(df):
-    # --- ISOLAMENTO CRÍTICO ---
     df = df.copy()
 
-    # Mapeando os nomes exatos encontrados no seu print
     adm_col_real = _choose_column(df, ["Admissao", "Admissão", "Data Admissão", "Data Admissao"])
     dem_col_real = _choose_column(df, ["Data demissão", "Data Demissão", "Data Desligamento", "Data demissao", "Data Demissao"])
 
-    # --- TRATAMENTO SEGURO DE DATAS ---
     if adm_col_real:
         df[adm_col_real] = pd.to_datetime(df[adm_col_real], dayfirst=True, errors="coerce")
     if dem_col_real:
@@ -96,18 +83,13 @@ def renderizar_painel_executivo(df):
         if not tenure_series.empty:
             tempo_medio_val = f"{tenure_series.mean():.2f} anos"
 
-    # ============================================================
-    # INTERFACE GRÁFICA REESTRUTURADA E PERSONALIZADA COM CORES
-    # ============================================================
     
-    # ============================================================
     # INTERFACE GRÁFICA REESTRUTURADA E PERSONALIZADA COM CORES
-    # ============================================================
+
     
     st.markdown("---")
 
     # --- CÁLCULO DE PORCENTAGENS DOS KPIS ---
-    # Proteção de divisão por zero caso o dataframe venha completamente vazio
     pct_ativos = (ativos / total_colaboradores * 100) if total_colaboradores > 0 else 0
     pct_fora = (fora_operacao / total_colaboradores * 100) if total_colaboradores > 0 else 0
     pct_desligados = (desligados / total_colaboradores * 100) if total_colaboradores > 0 else 0
@@ -124,7 +106,7 @@ def renderizar_painel_executivo(df):
             label="🟢 Colaboradores Ativos", 
             value=ativos,
             delta=f"{pct_ativos:.1f}% da base",
-            delta_color="off" # Mantém o texto cinza neutro e profissional em vez de verde/vermelho de ações
+            delta_color="off" 
         )
     with col_t3:
         st.metric(
@@ -155,42 +137,53 @@ def renderizar_painel_executivo(df):
 
     st.markdown("---")
 
+  # 3. SEÇÃO: DISTRIBUIÇÕES (FILTRADO APENAS ATIVOS / TRABALHANDO)
     # 3. SEÇÃO: DISTRIBUIÇÕES (FILTRADO APENAS ATIVOS / TRABALHANDO)
     st.subheader("Distribuições")
     col_dist1, col_dist2 = st.columns(2)
     
-    # Criando uma máscara para garantir que estamos olhando apenas para quem está na operação
     if situacao_col:
         df_ativos_dist = df[situacao_series.isin(["ativo", "ferias", "afastado"])].copy()
     else:
-        df_ativos_dist = df.copy() # Fallback caso a coluna não exista
+        df_ativos_dist = df.copy()
+
+    import numpy as np
 
     with col_dist1:
         if salario_col and 'salarios' in locals():
-            # Filtramos os salários apenas da base de funcionários ativos
             salarios_ativos = pd.to_numeric(df_ativos_dist[salario_col], errors="coerce").dropna()
             
             if not salarios_ativos.empty:
-                fig_sal = px.histogram(
-                    salarios_ativos, 
-                    nbins=25, 
-                    labels={"value": "Salário (R$)", "count": "Frequência"}, 
+                # --- FAINHAS LIMPAS: De 500 em 500 reais ---
+                min_sal = int(np.floor(salarios_ativos.min() / 500) * 500)
+                max_sal = int(np.ceil(salarios_ativos.max() / 500) * 500)
+                bins_custom_sal = list(range(min_sal, max_sal + 501, 500))
+                
+                bins_sal = pd.cut(salarios_ativos, bins=bins_custom_sal, right=False)
+                df_sal_bar = bins_sal.value_counts().sort_index().reset_index()
+                df_sal_bar.columns = ["Intervalo", "Frequência"]
+                
+                # Formatação bonita e sem quebras estranhas: "R$ 1500 - 2000"
+                df_sal_bar["Intervalo_Str"] = df_sal_bar["Intervalo"].apply(lambda x: f"R$ {int(x.left)}-{int(x.right)}")
+                
+                cores_sal = generate_palette(AZUL_PRINCIPAL, LARANJA_DESTAQUE, len(df_sal_bar))
+
+                fig_sal = px.bar(
+                    df_sal_bar, 
+                    x="Intervalo_Str", 
+                    y="Frequência",
+                    labels={"Intervalo_Str": "Faixa Salarial", "Frequência": "Frequência"}, 
                     title="Distribuição Salarial (Apenas Ativos)", 
                     template="plotly_white", 
-                    color_discrete_sequence=[AZUL_PRINCIPAL],
+                    color="Intervalo_Str",
+                    color_discrete_sequence=cores_sal,
                     text_auto=True
                 )
-                fig_sal.update_traces(
-                    textposition="outside",
-                    cliponaxis=False
-                )
+                fig_sal.update_traces(textposition="outside", cliponaxis=False)
                 fig_sal.update_layout(
-                    paper_bgcolor=BRANCO, 
-                    plot_bgcolor=BRANCO,
-                    height=380,
-                    showlegend=False,
-                    margin=dict(l=40, r=20, t=80, b=40),
-                    title_pad=dict(b=20)
+                    paper_bgcolor=BRANCO, plot_bgcolor=BRANCO, height=380,
+                    showlegend=False, margin=dict(l=40, r=20, t=80, b=60), title_pad=dict(b=20),
+                    xaxis={"type": "category", "tickangle": -30} # Inclinação leve para não cortar o texto
                 )
                 st.plotly_chart(fig_sal, width="stretch")
             else:
@@ -200,7 +193,6 @@ def renderizar_painel_executivo(df):
 
     with col_dist2:
         if adm_col_real:
-            # Recalculamos o tempo de empresa considerando apenas os funcionários ativos
             hoje = pd.to_datetime("today")
             adm_dates_at = df_ativos_dist[adm_col_real]
             dem_dates_at = df_ativos_dist[dem_col_real] if dem_col_real else pd.Series(pd.NaT, index=df_ativos_dist.index)
@@ -209,26 +201,37 @@ def renderizar_painel_executivo(df):
             tenure_years_at = (tenure_days_at / 365.25).dropna()
             
             if not tenure_years_at.empty:
-                fig_tempo = px.histogram(
-                    tenure_years_at, 
-                    nbins=20, 
-                    labels={"value": "Tempo (Anos)", "count": "Frequência"}, 
+                # --- FAIXAS LIMPAS: De 1 em 1 ano ---
+                max_ano = int(np.ceil(tenure_years_at.max()))
+                bins_custom_tempo = list(range(0, max_ano + 2, 1))
+                
+                bins_tempo = pd.cut(tenure_years_at, bins=bins_custom_tempo, right=False)
+                df_tempo_bar = bins_tempo.value_counts().sort_index().reset_index()
+                df_tempo_bar.columns = ["Intervalo", "Frequência"]
+                
+                # Formatação bonita: "0 - 1 Ano", "1 - 2 Anos"
+                df_tempo_bar["Intervalo_Str"] = df_tempo_bar["Intervalo"].apply(
+                    lambda x: f"{int(x.left)}-{int(x.right)} Ano" if int(x.left) <= 1 else f"{int(x.left)}-{int(x.right)} Anos"
+                )
+                
+                cores_tempo = generate_palette(AZUL_PRINCIPAL, LARANJA_DESTAQUE, len(df_tempo_bar))
+
+                fig_tempo = px.bar(
+                    df_tempo_bar, 
+                    x="Intervalo_Str", 
+                    y="Frequência",
+                    labels={"Intervalo_Str": "Tempo de Casa", "Frequência": "Frequência"}, 
                     title="Distribuição de Tempo de Empresa (Apenas Ativos)", 
                     template="plotly_white", 
-                    color_discrete_sequence=[LARANJA_DESTAQUE],
+                    color="Intervalo_Str",
+                    color_discrete_sequence=cores_tempo,
                     text_auto=True
                 )
-                fig_tempo.update_traces(
-                    textposition="outside",
-                    cliponaxis=False
-                )
+                fig_tempo.update_traces(textposition="outside", cliponaxis=False)
                 fig_tempo.update_layout(
-                    paper_bgcolor=BRANCO, 
-                    plot_bgcolor=BRANCO,
-                    height=380,
-                    showlegend=False,
-                    margin=dict(l=40, r=20, t=80, b=40),
-                    title_pad=dict(b=20)
+                    paper_bgcolor=BRANCO, plot_bgcolor=BRANCO, height=380,
+                    showlegend=False, margin=dict(l=40, r=20, t=80, b=60), title_pad=dict(b=20),
+                    xaxis={"type": "category", "tickangle": -30}
                 )
                 st.plotly_chart(fig_tempo, width="stretch")
             else:
@@ -236,7 +239,6 @@ def renderizar_painel_executivo(df):
         else:
             st.info("Dados de tempo de empresa insuficientes.")
     st.markdown("---")
-
     # 4. SEÇÃO: ESTRUTURA ORGANIZACIONAL (Usa a paleta sequencial do projeto)
     st.subheader("Estrutura Organizacional")
     col_org1, col_org2 = st.columns(2)
@@ -250,9 +252,8 @@ def renderizar_painel_executivo(df):
             df_gcount.columns = ["Gestor", "Total"]
             df_gcount = df_gcount.head(8).sort_values(by="Total", ascending=True)
             
-            # Aplicação da lógica de destaque da maior barra nos gestores
-            max_gest = df_gcount["Total"].max()
-            colors_gest = [LARANJA_DESTAQUE if t == max_gest else AZUL_PRINCIPAL for t in df_gcount["Total"]]
+            # Gera paleta do azul ao laranja para destacar o maior gestor
+            colors_gest = generate_palette(AZUL_PRINCIPAL, LARANJA_DESTAQUE, len(df_gcount))
             
             fig_gest = px.bar(
                 df_gcount, 
@@ -289,11 +290,13 @@ def renderizar_painel_executivo(df):
             
             df_cc = df_cargo.value_counts().reset_index(name="Quantidade")
             df_cc.columns = ["Cargo", "Quantidade"]
+            
+            # Pega o top 8 e ordena do menor para o maior volume
             df_cc = df_cc.head(8).sort_values(by="Quantidade", ascending=True)
             
-            # --- LÓGICA DE DESTAQUE DINÂMICO (MAIOR BARRA EM LARANJA) ---
-            max_cargo = df_cc["Quantidade"].max()
-            colors_cargo = [LARANJA_DESTAQUE if q == max_cargo else AZUL_PRINCIPAL for q in df_cc["Quantidade"]]
+            # Gera uma paleta que transita do azul ao laranja para os cargos
+            cores_degrade = generate_palette(AZUL_PRINCIPAL, LARANJA_DESTAQUE, len(df_cc))
+            cores_degrade.reverse()
             
             fig_cargo = px.bar(
                 df_cc, 
@@ -302,28 +305,26 @@ def renderizar_painel_executivo(df):
                 orientation="h", 
                 title="Principais Cargos", 
                 template="plotly_white",
-                text="Quantidade" # ADICIONADO: Ativa o rótulo de dados na barra horizontal
+                text="Quantidade" 
             )
             fig_cargo.update_traces(
-                marker_color=colors_cargo,
-                textposition="outside", # ADICIONADO: Garante o número do lado de fora da barra
-                cliponaxis=False        # ADICIONADO: Impede cortes no texto final
+                marker_color=cores_degrade, # Aplica a lista de cores calculada
+                textposition="outside", 
+                cliponaxis=False        
             )
             fig_cargo.update_layout(
                 paper_bgcolor=BRANCO, 
                 plot_bgcolor=BRANCO, 
                 height=380,
-                margin=dict(l=180, r=40, t=80, b=40), # CORRIGIDO: Expandido 't' para 80 e 'r' para 40
-                title_pad=dict(b=20),                # ADICIONADO: Afasta o título das barras
-                xaxis_title="Quantidade",
+                margin=dict(l=180, r=40, t=80, b=40), 
+                title_pad=dict(b=20),                
+                xaxis_title="Quantidade de Colaboradores",
                 yaxis_title=None
             )
             st.plotly_chart(fig_cargo, width="stretch")
         else:
             st.info("Coluna de cargo não identificada.")
     st.markdown("---")
-
-    # 5. SEÇÃO: MOVIMENTAÇÃO AO LONGO DO TEMPO (Mapeamento explícito de Admissões/Demissões)
     # 5. SEÇÃO: MOVIMENTAÇÃO AO LONGO DO TEMPO (Com cálculo dinâmico de Turnover Geral)
     # 1. PEGA OS STATUS QUE ESTÃO ATIVOS APÓS O FILTRO DA SIDEBAR
     col_status_atual = "Status" if "Status" in df.columns else ("Situação" if "Situação" in df.columns else None)

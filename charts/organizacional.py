@@ -2,9 +2,7 @@ import streamlit as st
 import plotly.express as px
 import pandas as pd
 
-AZUL_PRINCIPAL = "#28275a"
-LARANJA_DESTAQUE = "#d5741b"
-BRANCO = "#ffffff"
+from assets.cores import AZUL_PRINCIPAL, LARANJA_DESTAQUE, BRANCO, PALETA_PRINCIPAL, generate_palette
 
 PALETA_PRINCIPAL = [AZUL_PRINCIPAL, LARANJA_DESTAQUE, "#4e54c8", "#ff9233", "#7f7fd5"]
 
@@ -112,26 +110,26 @@ def renderizar_estrutura_organizacional(df):
         if col_setor and not df_ausentes.empty:
             df_ausentes_setor = df_ausentes.groupby([col_setor, col_situacao]).size().reset_index()
             
-            # FORÇAR OS NOMES DAS COLUNAS MANUALMENTE - Evita o ValueError do Plotly
             df_ausentes_setor.columns = ["Setor", "Situacao", "Quantidade"]
             df_ausentes_setor = df_ausentes_setor.sort_values(by="Quantidade", ascending=True)
             
-            fig_ausentes = px.bar(
+            fig_ausentes = px.pie(
                 df_ausentes_setor,
-                x="Quantidade",
-                y="Setor",
-                color="Situacao",
-                orientation="h",
+                names="Setor",
+                values="Quantidade",
+                hole=0.4,
                 template="plotly_white",
-                color_discrete_map={"férias": "#f1c40f", "ferias": "#f1c40f", "afastado": LARANJA_DESTAQUE},
-                labels={"Quantidade": "Colaboradores Ausentes", "Setor": "Setor", "Situacao": "Motivo"}
+                color_discrete_sequence=[LARANJA_DESTAQUE, AZUL_PRINCIPAL]
+            )
+            fig_ausentes.update_traces(
+                textinfo="value",
+                texttemplate="%{value}"
             )
             fig_ausentes.update_layout(
                 paper_bgcolor=BRANCO,
                 plot_bgcolor=BRANCO,
                 height=380,
-                margin=dict(l=150, r=20, t=40, b=40),
-                yaxis_title=None
+                legend=dict(orientation="h", y=-0.1, x=0.1)
             )
             st.plotly_chart(fig_ausentes, width="stretch")
             
@@ -179,6 +177,10 @@ def renderizar_estrutura_organizacional(df):
                 template="plotly_white",
                 color_discrete_sequence=PALETA_PRINCIPAL
             )
+            fig_emp.update_traces(
+                textinfo="value",
+                texttemplate="%{value}"
+            )
             fig_emp.update_layout(
                 paper_bgcolor=BRANCO,
                 height=350,
@@ -210,16 +212,19 @@ def renderizar_estrutura_organizacional(df):
                 df_m_count = df_filtro_motivos[col_motivo].value_counts().reset_index()
                 df_m_count.columns = ["Motivo", "Total"]
                 df_m_count = df_m_count.head(6).sort_values(by="Total", ascending=True)
-                
+
+                cores_motivos = generate_palette(AZUL_PRINCIPAL, LARANJA_DESTAQUE, len(df_m_count))
+
                 fig_motivos = px.bar(
                     df_m_count,
                     x="Total",
                     y="Motivo",
                     orientation="h",
                     template="plotly_white",
-                    color_discrete_sequence=[LARANJA_DESTAQUE],
+                    text="Total",
                     labels={"Total": "Quantidade de Desligamentos"}
                 )
+                fig_motivos.update_traces(marker_color=cores_motivos, textposition="outside", cliponaxis=False)
                 fig_motivos.update_layout(
                     paper_bgcolor=BRANCO,
                     plot_bgcolor=BRANCO,
