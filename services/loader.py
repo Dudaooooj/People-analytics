@@ -3,6 +3,37 @@ import streamlit as st
 import os
 import glob
 
+
+def _ler_arquivo_planilha(caminho, dtype_dict=None):
+    """Lê arquivos Excel/CSV com fallback tolerante a arquivos inválidos."""
+    try:
+        nome = os.path.basename(caminho).lower()
+        if nome.endswith(".csv"):
+            return pd.read_csv(caminho, dtype=dtype_dict)
+
+        if nome.endswith((".xlsx", ".xlsm", ".xltx", ".xltm")):
+            try:
+                return pd.read_excel(caminho, dtype=dtype_dict, engine="openpyxl")
+            except Exception:
+                try:
+                    return pd.read_excel(caminho, dtype=dtype_dict)
+                except Exception:
+                    return pd.DataFrame()
+
+        if nome.endswith(".xls"):
+            try:
+                return pd.read_excel(caminho, dtype=dtype_dict, engine="xlrd")
+            except Exception:
+                try:
+                    return pd.read_excel(caminho, dtype=dtype_dict)
+                except Exception:
+                    return pd.DataFrame()
+
+        return pd.DataFrame()
+    except Exception:
+        return pd.DataFrame()
+
+
 def _ler_excel_flexivel(caminho_base, dtype_dict):
     """Tenta ler o arquivo como .xlsx ou .xls automaticamente"""
     extensoes = [".xlsx", ".xls"]
@@ -22,15 +53,20 @@ def _ler_excel_flexivel(caminho_base, dtype_dict):
 
 
 def _find_and_read(patterns, dtype_dict=None):
-    """Procura por arquivos que casem com os padrões (glob) e lê o primeiro encontrado."""
+    """Procura por arquivos que casem com os padrões e lê o primeiro válido."""
     for p in patterns:
-        matches = glob.glob(p)
-        if matches:
-            caminho = matches[0]
-            try:
-                return pd.read_excel(caminho, dtype=dtype_dict)
-            except Exception:
-                return pd.read_excel(caminho)
+        matches = sorted(glob.glob(p))
+        for caminho in matches:
+            nome = os.path.basename(caminho)
+            if nome.startswith(".~lock.") or nome.startswith("~$"):
+                continue
+
+            df = _ler_arquivo_planilha(caminho, dtype_dict)
+            if not df.empty:
+                return df
+
+            st.warning(f"Arquivo ignorado por incompatibilidade ou corrupção: {caminho}")
+
     return pd.DataFrame()
 
 @st.cache_data

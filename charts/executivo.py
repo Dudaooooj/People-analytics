@@ -241,57 +241,90 @@ def renderizar_painel_executivo(df):
     st.markdown("---")
     # 4. SEÇÃO: ESTRUTURA ORGANIZACIONAL (Usa a paleta sequencial do projeto)
     st.subheader("Estrutura Organizacional")
-    col_org1, col_org2 = st.columns(2)
+    
+    # Criamos colunas assimétricas: 4 partes para a tabela (esquerda) e 6 partes para o gráfico (direita)
+    col_tabela, col_grafico = st.columns([4, 6])
 
-    # --- GRÁFICO EM LARGURA TOTAL (SEM COLUNAS) ---
+    # --- IDENTIFICAÇÃO E MAPEAMENTO PRÉVIO DAS COLUNAS PARA A TABELA ---
+    nome_col_tab = _choose_column(df, ["Nome", "Nome Completo", "Colaborador", "Funcionário", "Empregado"])
+    sal_col_tab = _choose_column(df, ["Salário", "Salario", "Remuneração", "Salário (R$)"])
     cargo_col = _choose_column(df, ["Cargo", "CARGO", "Função", "Funcao", "nome cargo", "Nome Cargo", "Nome cargo"]) 
     
-    if cargo_col:
-        # --- LIMPEZA E PADRONIZAÇÃO AVANÇADA DE TEXTO ---
-        df_cargo = df[cargo_col].astype(str).str.strip().str.upper()
+    # Tentativa de pegar a coluna real de tempo de casa ou usar o fallback já calculado do seu loader
+    tempo_col_tab = _choose_column(df, ["Tempo de Casa", "Tempo (Anos)", "Antiguidade", "Anos de Empresa"])
+
+    # --- COLUNA DA ESQUERDA: MINI TABELA DE APOIO ---
+    with col_tabela:
+        st.markdown("### Visão Geral de Colaboradores")
         
-        # Remove acentuações comuns para unificar (MANUTENÇÃO -> MANUTENCAO)
-        df_cargo = df_cargo.str.replace("ÇÃO", "CAO", regex=True)
-        df_cargo = df_cargo.str.replace("Ã", "A", regex=True)
+        # Filtra as colunas disponíveis para montar um resumo limpo
+        colunas_validas = [c for c in [nome_col_tab, sal_col_tab, tempo_col_tab, cargo_col] if c]
         
-        df_cargo = df_cargo[(df_cargo != "") & (df_cargo.str.lower() != "nan")]
-        
-        df_cc = df_cargo.value_counts().reset_index(name="Quantidade")
-        df_cc.columns = ["Cargo", "Quantidade"]
-        
-        # Pega o top 8 e ordena do menor para o maior volume
-        df_cc = df_cc.head(8).sort_values(by="Quantidade", ascending=True)
-        
-        # Gera uma paleta que transita do azul ao laranja para os cargos
-        cores_degrade = generate_palette(AZUL_PRINCIPAL, LARANJA_DESTAQUE, len(df_cc))
-        cores_degrade.reverse()
-        
-        fig_cargo = px.bar(
-            df_cc, 
-            x="Quantidade", 
-            y="Cargo", 
-            orientation="h", 
-            title="Principais Cargos na Organização", 
-            template="plotly_white",
-            text="Quantidade" 
-        )
-        fig_cargo.update_traces(
-            marker_color=cores_degrade, 
-            textposition="outside", 
-            cliponaxis=False        
-        )
-        fig_cargo.update_layout(
-            paper_bgcolor=BRANCO, 
-            plot_bgcolor=BRANCO, 
-            height=420, # Aumentei ligeiramente a altura para aproveitar o espaço expandido
-            margin=dict(l=220, r=50, t=80, b=40), # Ajustado recuo esquerdo para nomes longos não cortarem
-            title_pad=dict(b=20),                
-            xaxis_title="Quantidade de Colaboradores",
-            yaxis_title=None
-        )
-        st.plotly_chart(fig_cargo, width="stretch")
-    else:
-        st.info("Coluna de cargo não identificada.")
+        if colunas_validas and not df.empty:
+            # Exibe os dados de forma resumida (Top 10 ou base completa filtrada na sidebar)
+            df_resumo_tab = df[colunas_validas].copy()
+            
+            # Formata o salário se ele for numérico para ficar visualmente bonito (R$ 2.500)
+            if sal_col_tab and pd.api.types.is_numeric_dtype(df_resumo_tab[sal_col_tab]):
+                df_resumo_tab[sal_col_tab] = df_resumo_tab[sal_col_tab].apply(lambda x: f"R$ {x:,.0f}".replace(",", "."))
+
+            st.dataframe(
+                df_resumo_tab.head(50), # Exibe as linhas iniciais da base filtrada
+                width="stretch",
+                height=380, # Alinha o tamanho vertical próximo ao do gráfico
+                hide_index=True
+            )
+        else:
+            st.info("Colunas insuficientes para gerar a tabela resumo.")
+
+    # --- COLUNA DA DIREITA: GRÁFICO DE CARGOS ---
+    with col_grafico:
+        if cargo_col:
+            # --- LIMPEZA E PADRONIZAÇÃO AVANÇADA DE TEXTO ---
+            df_cargo = df[cargo_col].astype(str).str.strip().str.upper()
+            
+            # Remove acentuações comuns para unificar (MANUTENÇÃO -> MANUTENCAO)
+            df_cargo = df_cargo.str.replace("ÇÃO", "CAO", regex=True)
+            df_cargo = df_cargo.str.replace("Ã", "A", regex=True)
+            
+            df_cargo = df_cargo[(df_cargo != "") & (df_cargo.str.lower() != "nan")]
+            
+            df_cc = df_cargo.value_counts().reset_index(name="Quantidade")
+            df_cc.columns = ["Cargo", "Quantidade"]
+            
+            # Pega o top 8 e ordena do menor para o maior volume
+            df_cc = df_cc.head(8).sort_values(by="Quantidade", ascending=True)
+            
+            # Gera uma paleta que transita do azul ao laranja para os cargos
+            cores_degrade = generate_palette(AZUL_PRINCIPAL, LARANJA_DESTAQUE, len(df_cc))
+            cores_degrade.reverse()
+            
+            fig_cargo = px.bar(
+                df_cc, 
+                x="Quantidade", 
+                y="Cargo", 
+                orientation="h", 
+                title="Principais Cargos na Organização", 
+                template="plotly_white",
+                text="Quantidade" 
+            )
+            fig_cargo.update_traces(
+                marker_color=cores_degrade, 
+                textposition="outside", 
+                cliponaxis=False        
+            )
+            fig_cargo.update_layout(
+                paper_bgcolor=BRANCO, 
+                plot_bgcolor=BRANCO, 
+                height=380, # Reduzi levemente para casar com a altura padrão da tabela
+                margin=dict(l=180, r=50, t=60, b=40), 
+                title_pad=dict(b=15),                
+                xaxis_title="Quantidade de Colaboradores",
+                yaxis_title=None
+            )
+            st.plotly_chart(fig_cargo, width="stretch")
+        else:
+            st.info("Coluna de cargo não identificada.")
         
     st.markdown("---")
     # 5. SEÇÃO: MOVIMENTAÇÃO AO LONGO DO TEMPO (Com cálculo dinâmico de Turnover Geral)
