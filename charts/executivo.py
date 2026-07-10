@@ -154,7 +154,7 @@ def renderizar_painel_executivo(df):
             salarios_ativos = pd.to_numeric(df_ativos_dist[salario_col], errors="coerce").dropna()
             
             if not salarios_ativos.empty:
-                # --- FAINHAS LIMPAS: De 500 em 500 reais ---
+                # --- FAIXAS LIMPAS: De 500 em 500 reais ---
                 min_sal = int(np.floor(salarios_ativos.min() / 500) * 500)
                 max_sal = int(np.ceil(salarios_ativos.max() / 500) * 500)
                 bins_custom_sal = list(range(min_sal, max_sal + 501, 500))
@@ -163,7 +163,7 @@ def renderizar_painel_executivo(df):
                 df_sal_bar = bins_sal.value_counts().sort_index().reset_index()
                 df_sal_bar.columns = ["Intervalo", "Frequência"]
                 
-                # Formatação bonita e sem quebras estranhas: "R$ 1500 - 2000"
+                # Formatação limpa e direta
                 df_sal_bar["Intervalo_Str"] = df_sal_bar["Intervalo"].apply(lambda x: f"R$ {int(x.left)}-{int(x.right)}")
                 
                 cores_sal = generate_palette(AZUL_PRINCIPAL, LARANJA_DESTAQUE, len(df_sal_bar))
@@ -183,7 +183,12 @@ def renderizar_painel_executivo(df):
                 fig_sal.update_layout(
                     paper_bgcolor=BRANCO, plot_bgcolor=BRANCO, height=380,
                     showlegend=False, margin=dict(l=40, r=20, t=80, b=60), title_pad=dict(b=20),
-                    xaxis={"type": "category", "tickangle": -30} # Inclinação leve para não cortar o texto
+                    # AJUSTE: Redução da fonte (size=10) e mantido reto (tickangle=0)
+                    xaxis={
+                        "type": "category", 
+                        "tickangle": 0, 
+                        "tickfont": {"size": 10}
+                    } 
                 )
                 st.plotly_chart(fig_sal, width="stretch")
             else:
@@ -209,7 +214,6 @@ def renderizar_painel_executivo(df):
                 df_tempo_bar = bins_tempo.value_counts().sort_index().reset_index()
                 df_tempo_bar.columns = ["Intervalo", "Frequência"]
                 
-                # Formatação bonita: "0 - 1 Ano", "1 - 2 Anos"
                 df_tempo_bar["Intervalo_Str"] = df_tempo_bar["Intervalo"].apply(
                     lambda x: f"{int(x.left)}-{int(x.right)} Ano" if int(x.left) <= 1 else f"{int(x.left)}-{int(x.right)} Anos"
                 )
@@ -231,7 +235,12 @@ def renderizar_painel_executivo(df):
                 fig_tempo.update_layout(
                     paper_bgcolor=BRANCO, plot_bgcolor=BRANCO, height=380,
                     showlegend=False, margin=dict(l=40, r=20, t=80, b=60), title_pad=dict(b=20),
-                    xaxis={"type": "category", "tickangle": -30}
+                    # AJUSTE: Redução da fonte (size=10) e mantido reto (tickangle=0)
+                    xaxis={
+                        "type": "category", 
+                        "tickangle": 0, 
+                        "tickfont": {"size": 10}
+                    }
                 )
                 st.plotly_chart(fig_tempo, width="stretch")
             else:

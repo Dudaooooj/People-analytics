@@ -12,7 +12,6 @@ def renderizar_analise_demografica(df):
 
     df = df.copy()
     df.columns = df.columns.str.strip() # Remove espaços extras invisíveis das colunas
-
     # LINHA 1: IDADE E GRAU DE INSTRUÇÃO
     col1, col2 = st.columns(2)
 
@@ -25,31 +24,27 @@ def renderizar_analise_demografica(df):
                 break
         
         if col_idade:
-            # Importações necessárias para processar as faixas e cores
             import numpy as np
             import plotly.colors
 
-            # Mapeamento do gradiente azul para ciano
-            # Mapeamento do gradiente ligando o seu Azul diretamente ao seu Laranja
-            # Adicionei um tom intermediário (roxo/marrom discreto) para a transição não passar por um cinza morto
             combinacao_azul_laranja = ["#28275a", "#5a3a5f", "#8d4e5a", "#bd6448", "#d5741b"]
 
             if pd.api.types.is_numeric_dtype(df[col_idade]):
                 idades_limpas = pd.to_numeric(df[col_idade], errors="coerce").dropna()
                 
                 if not idades_limpas.empty:
-                    # --- FAIXAS LIMPAS: De 5 em 5 anos ---
-                    min_idade = int(np.floor(idades_limpas.min() / 5) * 5)
-                    max_idade = int(np.ceil(idades_limpas.max() / 5) * 5)
-                    bins_custom_idade = list(range(min_idade, max_idade + 6, 5))
+                    # --- CONFIGURAÇÃO DAS FAIXAS MANUAIS PEDIDAS ---
+                    # O limite final (120) serve para englobar qualquer idade acima de 60
+                    bins_custom_idade = [18, 21, 26, 31, 36, 41, 46, 51, 56, 61, 120]
+                    rotulos_custom = ["18-20", "21-25", "26-30", "31-35", "36-40", "41-45", "46-50", "51-55", "56-60", "60+"]
                     
-                    bins_id = pd.cut(idades_limpas, bins=bins_custom_idade, right=False)
-                    df_idade_bar = bins_id.value_counts().sort_index().reset_index()
-                    df_idade_bar.columns = ["Intervalo", "Nº de Colaboradores"]
+                    # Corta as idades usando as novas faixas fixas (right=False inclui o valor da esquerda)
+                    bins_id = pd.cut(idades_limpas, bins=bins_custom_idade, labels=rotulos_custom, right=False)
                     
-                    df_idade_bar["Intervalo_Str"] = df_idade_bar["Intervalo"].apply(lambda x: f"{int(x.left)}-{int(x.right)}")
+                    # Agrupa e preenche faixas que eventualmente fiquem vazias com zero
+                    df_idade_bar = bins_id.value_counts().reindex(rotulos_custom, fill_value=0).reset_index()
+                    df_idade_bar.columns = ["Intervalo_Str", "Nº de Colaboradores"]
                     
-                    # Amostra as cores ao longo da nova escala de transição Azul -> Laranja
                     cores_idade = plotly.colors.sample_colorscale(combinacao_azul_laranja, len(df_idade_bar))
 
                     fig_idade = px.bar(
@@ -59,19 +54,18 @@ def renderizar_analise_demografica(df):
                         title="Distribuição de Idades (Histograma Padronizado)",
                         template="plotly_white",
                         color="Intervalo_Str", 
-                        color_discrete_sequence=cores_idade, # Aplica o degradê misto
+                        color_discrete_sequence=cores_idade,
                         labels={"Intervalo_Str": "Idade (Anos)", "Nº de Colaboradores": "Nº de Colaboradores"},
                         text_auto=True 
                     )
                 else:
                     fig_idade = None
             else:
-                # Caso a base de dados já venha com texto/faixas prontas (ex: "De 20 a 30 anos")
                 df_idade = df[col_idade].value_counts().reset_index(name="Quantidade")
                 df_idade.columns = [col_idade, "Quantidade"]
                 df_idade = df_idade.sort_values(by="Quantidade", ascending=True)
                 
-                cores_idade = plotly.colors.sample_colorscale(combinacao_azul_ciano, len(df_idade))
+                cores_idade = plotly.colors.sample_colorscale(combinacao_azul_laranja, len(df_idade))
                 
                 fig_idade = px.bar(
                     df_idade,
@@ -92,12 +86,11 @@ def renderizar_analise_demografica(df):
                     paper_bgcolor=BRANCO, 
                     plot_bgcolor=BRANCO, 
                     height=380,
-                    showlegend=False, # Oculta a legenda repetitiva
+                    showlegend=False,
                     margin=dict(l=60, r=40, t=80, b=40), 
                     title_pad=dict(b=20) 
                 )
                 if not pd.api.types.is_numeric_dtype(df[col_idade]):
-                    # Ajuste de margem caso o gráfico seja o horizontal textual
                     fig_idade.update_layout(margin=dict(l=120, r=40, t=80, b=40))
                 
                 st.plotly_chart(fig_idade, width="stretch")
