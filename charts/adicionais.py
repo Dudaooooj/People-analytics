@@ -137,4 +137,4 @@ def renderizar_analise_atestados(df):
 
     st.dataframe(grp_display.reset_index(drop=True), width="stretch")
 
-    st.markdown("\n> 💡 **Nota métrica:** Para registros sem data de término informada, o sistema considera a data atual para o cálculo volumétrico de dias em aberto.")
+    st.markdown("\n>")

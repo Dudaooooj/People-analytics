@@ -46,22 +46,29 @@ def carregar_atestados_consolidados(arquivos_carregados=None):
 
     # SE NÃO HOUVER ARQUIVOS CARREGADOS, USA O FALLBACK LOCAL PADRÃO
     else:
+        import os
+        
+        # Garante o mapeamento correto do caminho independente do sistema operacional (Windows/Linux)
+        diretorio_base = os.path.dirname(__file__) if "__file__" in locals() else "."
+        
         arquivos_locais = [
-            "dados/GP4 _ Relatorio.ods",
-            "dados/Ledinternet_ Relatorio.ods",
-            "dados/Ledservicos _ Relatorio.ods"
+            os.path.join(diretorio_base, "dados", "GP4 _ Relatorio.ods"),
+            os.path.join(diretorio_base, "dados", "Ledinternet_ Relatorio.ods"),
+            os.path.join(diretorio_base, "dados", "Ledservicos _ Relatorio.ods")
         ]
+        
         for arquivo in arquivos_locais:
-            try:
-                df_temp = pd.read_excel(arquivo, engine="odf", sheet_name=0)
-                if df_temp.shape[0] > 0 and ("CID" in df_temp.iloc[0].values or "Nome" in df_temp.iloc[0].values):
-                    df_temp.columns = df_temp.iloc[0]
-                    df_temp = df_temp[1:].reset_index(drop=True)
-                df_temp = df_temp.dropna(how="all", axis=0).dropna(how="all", axis=1)
-                df_temp.columns = [str(c).strip() for c in df_temp.columns]
-                dfs.append(df_temp)
-            except Exception:
-                pass # Ignora silenciosamente se os arquivos locais não existirem
+            if os.path.exists(arquivo): # Só tenta ler se o arquivo fisicamente existir na nuvem
+                try:
+                    df_temp = pd.read_excel(arquivo, engine="odf", sheet_name=0)
+                    if df_temp.shape[0] > 0 and ("CID" in df_temp.iloc[0].values or "Nome" in df_temp.iloc[0].values):
+                        df_temp.columns = df_temp.iloc[0]
+                        df_temp = df_temp[1:].reset_index(drop=True)
+                    df_temp = df_temp.dropna(how="all", axis=0).dropna(how="all", axis=1)
+                    df_temp.columns = [str(c).strip() for c in df_temp.columns]
+                    dfs.append(df_temp)
+                except Exception as e:
+                    st.sidebar.error(f"Erro ao ler arquivo local na nuvem: {e}")
             
     if dfs:
         df_consolidado = pd.concat(dfs, ignore_index=True)
