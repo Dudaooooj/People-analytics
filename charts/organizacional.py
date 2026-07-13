@@ -67,7 +67,7 @@ def renderizar_estrutura_organizacional(df):
     st.markdown("### Painel de Contingência (Férias e Afastados)")
     
     # Filtrar quem está fora da operação atual de forma tolerante a acentos
-    df_ausentes = df[df[col_situacao].isin(["férias", "ferias", "afastado"])]
+    df_ausentes = df[df[col_situacao].isin(["férias", "ferias", "afastado", "acid. trabalho período superior a 15 dias", "novo afast. mesma doença"])]
     
     if col_setor and not df_ausentes.empty:
         col3, col4 = st.columns(2)

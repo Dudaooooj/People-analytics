@@ -28,8 +28,10 @@ def _normalize_status(val: str) -> str:
         return "ativo"
     if v in ("demitido", "desligado", "demissão", "demissao", "demitida", "demitidos"):
         return "desligado"
-    if v in ("férias", "ferias", "férias/afastado"):
+    
+    if v in ("férias", "ferias", "férias/afastado", "acid. trabalho período superior a 15 dias", "novo afast. mesma doença"):
         return "ferias"
+        
     if v in ("afastado", "afastamento"):
         return "afastado"
     return "outro"
@@ -248,103 +250,66 @@ def renderizar_painel_executivo(df):
         else:
             st.info("Dados de tempo de empresa insuficientes.")
     st.markdown("---")
-    # 4. SEÇÃO: ESTRUTURA ORGANIZACIONAL (Usa a paleta sequencial do projeto)
+    # # 4. SEÇÃO: ESTRUTURA ORGANIZACIONAL (Usa a paleta sequencial do projeto)
     st.subheader("Estrutura Organizacional")
     
-    # Criamos colunas assimétricas: 4 partes para a tabela (esquerda) e 6 partes para o gráfico (direita)
-    col_tabela, col_grafico = st.columns([4, 6])
-
-    # --- IDENTIFICAÇÃO E MAPEAMENTO PRÉVIO DAS COLUNAS PARA A TABELA ---
-    nome_col_tab = _choose_column(df, ["Nome", "Nome Completo", "Colaborador", "Funcionário", "Empregado"])
-    sal_col_tab = _choose_column(df, ["Salário", "Salario", "Remuneração", "Salário (R$)"])
+    # --- IDENTIFICAÇÃO DO CARGO ---
     cargo_col = _choose_column(df, ["Cargo", "CARGO", "Função", "Funcao", "nome cargo", "Nome Cargo", "Nome cargo"]) 
-    
-    # Tentativa de pegar a coluna real de tempo de casa ou usar o fallback já calculado do seu loader
-    tempo_col_tab = _choose_column(df, ["Tempo de Casa", "Tempo (Anos)", "Antiguidade", "Anos de Empresa"])
 
-    # --- COLUNA DA ESQUERDA: MINI TABELA DE APOIO ---
-    with col_tabela:
-        st.markdown("### Visão Geral de Colaboradores")
+    # --- GRÁFICO DE CARGOS EM LARGURA TOTAL ---
+    if cargo_col:
+        # --- LIMPEZA E PADRONIZAÇÃO AVANÇADA DE TEXTO ---
+        df_cargo = df[cargo_col].astype(str).str.strip().str.upper()
         
-        # Filtra as colunas disponíveis para montar um resumo limpo
-        colunas_validas = [c for c in [nome_col_tab, sal_col_tab, tempo_col_tab, cargo_col] if c]
+        # Remove acentuações comuns para unificar (MANUTENÇÃO -> MANUTENCAO)
+        df_cargo = df_cargo.str.replace("ÇÃO", "CAO", regex=True)
+        df_cargo = df_cargo.str.replace("Ã", "A", regex=True)
         
-        if colunas_validas and not df.empty:
-            # Exibe os dados de forma resumida (Top 10 ou base completa filtrada na sidebar)
-            df_resumo_tab = df[colunas_validas].copy()
-            
-            # Formata o salário se ele for numérico para ficar visualmente bonito (R$ 2.500)
-            if sal_col_tab and pd.api.types.is_numeric_dtype(df_resumo_tab[sal_col_tab]):
-                df_resumo_tab[sal_col_tab] = df_resumo_tab[sal_col_tab].apply(lambda x: f"R$ {x:,.0f}".replace(",", "."))
-
-            st.dataframe(
-                df_resumo_tab.head(50), # Exibe as linhas iniciais da base filtrada
-                width="stretch",
-                height=380, # Alinha o tamanho vertical próximo ao do gráfico
-                hide_index=True
-            )
-        else:
-            st.info("Colunas insuficientes para gerar a tabela resumo.")
-
-    # --- COLUNA DA DIREITA: GRÁFICO DE CARGOS ---
-    with col_grafico:
-        if cargo_col:
-            # --- LIMPEZA E PADRONIZAÇÃO AVANÇADA DE TEXTO ---
-            df_cargo = df[cargo_col].astype(str).str.strip().str.upper()
-            
-            # Remove acentuações comuns para unificar (MANUTENÇÃO -> MANUTENCAO)
-            df_cargo = df_cargo.str.replace("ÇÃO", "CAO", regex=True)
-            df_cargo = df_cargo.str.replace("Ã", "A", regex=True)
-            
-            df_cargo = df_cargo[(df_cargo != "") & (df_cargo.str.lower() != "nan")]
-            
-            df_cc = df_cargo.value_counts().reset_index(name="Quantidade")
-            df_cc.columns = ["Cargo", "Quantidade"]
-            
-            # Pega o top 8 e ordena do menor para o maior volume
-            df_cc = df_cc.head(8).sort_values(by="Quantidade", ascending=True)
-            
-            # Gera uma paleta que transita do azul ao laranja para os cargos
-            cores_degrade = generate_palette(AZUL_PRINCIPAL, LARANJA_DESTAQUE, len(df_cc))
-            cores_degrade.reverse()
-            
-            fig_cargo = px.bar(
-                df_cc, 
-                x="Quantidade", 
-                y="Cargo", 
-                orientation="h", 
-                title="Principais Cargos na Organização", 
-                template="plotly_white",
-                text="Quantidade" 
-            )
-            fig_cargo.update_traces(
-                marker_color=cores_degrade, 
-                textposition="outside", 
-                cliponaxis=False        
-            )
-            fig_cargo.update_layout(
-                paper_bgcolor=BRANCO, 
-                plot_bgcolor=BRANCO, 
-                height=380, # Reduzi levemente para casar com a altura padrão da tabela
-                margin=dict(l=180, r=50, t=60, b=40), 
-                title_pad=dict(b=15),                
-                xaxis_title="Quantidade de Colaboradores",
-                yaxis_title=None
-            )
-            st.plotly_chart(fig_cargo, width="stretch")
-        else:
-            st.info("Coluna de cargo não identificada.")
+        df_cargo = df_cargo[(df_cargo != "") & (df_cargo.str.lower() != "nan")]
+        
+        df_cc = df_cargo.value_counts().reset_index(name="Quantidade")
+        df_cc.columns = ["Cargo", "Quantidade"]
+        
+        # Pega o top 8 e ordena do menor para o maior volume
+        df_cc = df_cc.head(8).sort_values(by="Quantidade", ascending=True)
+        
+        # Gera uma paleta que transita do azul ao laranja para os cargos
+        cores_degrade = generate_palette(AZUL_PRINCIPAL, LARANJA_DESTAQUE, len(df_cc))
+        cores_degrade.reverse()
+        
+        fig_cargo = px.bar(
+            df_cc, 
+            x="Quantidade", 
+            y="Cargo", 
+            orientation="h", 
+            title="Principais Cargos na Organização", 
+            template="plotly_white",
+            text="Quantidade" 
+        )
+        fig_cargo.update_traces(
+            marker_color=cores_degrade, 
+            textposition="outside", 
+            cliponaxis=False        
+        )
+        fig_cargo.update_layout(
+            paper_bgcolor=BRANCO, 
+            plot_bgcolor=BRANCO, 
+            height=380,
+            margin=dict(l=180, r=50, t=60, b=40), 
+            title_pad=dict(b=15),                
+            xaxis_title="Quantidade de Colaboradores",
+            yaxis_title=None
+        )
+        st.plotly_chart(fig_cargo, width="stretch")
+    else:
+        st.info("Coluna de cargo não identificada.")
         
     st.markdown("---")
     # 5. SEÇÃO: MOVIMENTAÇÃO AO LONGO DO TEMPO (Com cálculo dinâmico de Turnover Geral)
-    # 1. PEGA OS STATUS QUE ESTÃO ATIVOS APÓS O FILTRO DA SIDEBAR
     col_status_atual = "Status" if "Status" in df.columns else ("Situação" if "Situação" in df.columns else None)
-    
     status_presentes = df[col_status_atual].unique() if col_status_atual else []
 
-
     if any(s in status_presentes for s in ["Trabalhando", "Desligado"]):
-        
         st.subheader("Movimentação ao Longo do Tempo")
         
         admissoes_no_tempo = pd.DataFrame(columns=["Mes_Ano", "Admissões"])
@@ -360,14 +325,15 @@ def renderizar_painel_executivo(df):
             df_dem["Mes_Ano"] = df_dem[dem_col_real].dt.strftime("%Y-%m")
             demissoes_no_tempo = df_dem.groupby("Mes_Ano").size().reset_index(name="Demissões")
         
-        # O bloco abaixo precisa checar se há dados E se a divisão por zero não vai quebrar
         if (not admissoes_no_tempo.empty or not demissoes_no_tempo.empty):
             movimentacao = pd.merge(admissoes_no_tempo, demissoes_no_tempo, on="Mes_Ano", how="outer").fillna(0)
             movimentacao = movimentacao.sort_values("Mes_Ano")
             
+            # --- FILTRO: Apenas de Janeiro/2026 em diante ---
+            movimentacao = movimentacao[movimentacao["Mes_Ano"] >= "2026-01"].reset_index(drop=True)
+            
             # --- CÁLCULO DINÂMICO DO TOTAL DE ATIVOS EM CADA MÊS ---
             movimentacao["Ativos_No_Mes"] = 0
-
             for i, row in movimentacao.iterrows():
                 ultimo_dia = pd.to_datetime(row["Mes_Ano"]) + MonthEnd(1)
                 ativos = (
@@ -376,67 +342,105 @@ def renderizar_painel_executivo(df):
                 ).sum()
                 movimentacao.loc[i, "Ativos_No_Mes"] = ativos
             
-            # Evita divisão por zero se 'Ativos_No_Mes' for zero
+            # Cálculo da taxa de Turnover
             movimentacao["Turnover (%)"] = movimentacao.apply(
                 lambda r: (((r["Admissões"] + r["Demissões"]) / 2) / r["Ativos_No_Mes"] * 100) if r["Ativos_No_Mes"] > 0 else 0, 
                 axis=1
             )
 
-            # Criando o gráfico base com as linhas de volumes (Admissões e Demissões)
-            fig = px.line(
-                movimentacao, 
-                x="Mes_Ano", 
-                y=["Admissões", "Demissões"],
-                labels={"value": "Quantidade (Eixo Esq.)", "Mes_Ano": "Período (Mês/Ano)", "variable": "Movimentação"},
-                color_discrete_map={
-                    "Admissões": AZUL_PRINCIPAL,      
-                    "Demissões": "#4e54c8" 
-                },
-                markers=True,
-                title="Linha Histórica: Admissões x Demissões x Taxa de Turnover"
+            # Criando rótulos amigáveis para o eixo X (Ex: "jan/26")
+            meses_map = {"01": "jan", "02": "fev", "03": "mar", "04": "abr", "05": "mai", "06": "jun",
+                         "07": "jul", "08": "ago", "09": "set", "10": "out", "11": "nov", "12": "dez"}
+            
+            def formatar_mes_ano(txt):
+                ano, mes = txt.split("-")
+                return f"{meses_map[mes]}/{ano[2:]}"
+                
+            movimentacao["Periodo_Exibicao"] = movimentacao["Mes_Ano"].apply(formatar_mes_ano)
+
+            # --- CONSTRUÇÃO DO GRÁFICO MISTO CUSTOMIZADO (Plotly Graph Objects) ---
+            import plotly.graph_objects as go
+            fig = go.Figure()
+
+            # 1. Barras de Admitidos (Eixo Y Esquerdo) - Configurado com Azul Claro / Ciano
+            # 1. Barras de Admitidos (Eixo Y Esquerdo) - Agora com o Azul Escuro Principal
+            fig.add_trace(
+                go.Bar(
+                    x=movimentacao["Periodo_Exibicao"],
+                    y=movimentacao["Admissões"],
+                    name="Admitidos",
+                    marker_color=AZUL_PRINCIPAL,  # Azul escuro corporativo para os Admitidos
+                    text=movimentacao["Admissões"],
+                    textposition="outside"
+                )
             )
 
-            # Injetando a terceira linha (Turnover Geral) associada a um Eixo Y Secundário
-            import plotly.graph_objects as go
-            
+            # 2. Barras de Demitidos (Eixo Y Esquerdo) - Mantido Laranja do projeto
+            fig.add_trace(
+                go.Bar(
+                    x=movimentacao["Periodo_Exibicao"],
+                    y=movimentacao["Demissões"],
+                    name="Demitidos",
+                    marker_color=LARANJA_DESTAQUE,  
+                    text=movimentacao["Demissões"],
+                    textposition="outside"
+                )
+            )
+
+            # 3. Linha do Turnover Geral (Eixo Y Direito Secundário) - Mantido Roxo
             fig.add_trace(
                 go.Scatter(
-                    x=movimentacao["Mes_Ano"],
+                    x=movimentacao["Periodo_Exibicao"],
                     y=movimentacao["Turnover (%)"],
                     name="Turnover Geral (%)",
-                    mode="lines+markers",
-                    line=dict(color=LARANJA_DESTAQUE, width=3, dash="dash"), 
+                    mode="lines+markers+text",
+                    line=dict(color="#c54f00", width=3), 
                     marker=dict(size=6),
+                    text=movimentacao["Turnover (%)"].apply(lambda x: f"{x:.1f}%" if x > 0 else ""),
+                    textposition="top center",
                     yaxis="y2" 
                 )
             )
 
+            # 4. Linha da Meta Fixa (Eixo Y Direito Secundário) - Agora com o Azul Claro / Ciano
+            meta_valor = 10.0
+            fig.add_trace(
+                go.Scatter(
+                    x=movimentacao["Periodo_Exibicao"],
+                    y=[meta_valor] * len(movimentacao),
+                    name="Meta",
+                    mode="lines",
+                    line=dict(color="#4ebec8", width=2, dash="solid"), # Azul claro/ciano para a linha de teto da meta
+                    yaxis="y2"
+                )
+            )
+
+            # --- CONFIGURAÇÃO VISUAL COMPLETA DOS DOIS EIXOS (CORRIGIDA) ---
             fig.update_layout(
+                barmode="group", 
                 hovermode="x unified", 
-                legend_orientation="h", 
-                legend_y=1.15, 
+                legend=dict(orientation="h", y=1.15, x=0.2),
                 paper_bgcolor=BRANCO, 
                 plot_bgcolor=BRANCO,
-                height=450,
+                height=480,
+                title="Movimentações Mensais: Admitidos vs Demitidos vs Turnover Geral",
                 yaxis=dict(
                     title=dict(text="Quantidade de Colaboradores", font=dict(color=AZUL_PRINCIPAL)),
-                    tickfont=dict(color=AZUL_PRINCIPAL)
+                    tickfont=dict(color=AZUL_PRINCIPAL),
+                    gridcolor="#f0f0f0"
                 ),
                 yaxis2=dict(
-                    title=dict(text="Taxa de Turnover (%)", font=dict(color=LARANJA_DESTAQUE)),
-                    tickfont=dict(color=LARANJA_DESTAQUE),
+                    title=dict(text="Taxa de Turnover / Meta", font=dict(color="#5a3a5f")),
+                    tickfont=dict(color="#5a3a5f"),
                     anchor="x",
                     overlaying="y",
                     side="right",
-                    ticksuffix="%"
+                    ticksuffix="%",
+                    range=[0, max(movimentacao["Turnover (%)"].max() + 5, 15)]
                 )
             )
-            
-            fig.update_traces(marker=dict(line=dict(width=0)))
-            st.plotly_chart(fig, width="stretch") # Correção leve aqui de width para usar o padrão do streamlit
+            st.plotly_chart(fig, width="stretch")
         else:
-            st.warning("Sem dados históricos de datas suficientes para gerar a linha temporal.")
-            
+            st.warning("Sem dados históricos de datas suficientes a partir de 2026 para gerar a linha temporal.")
     else:
-        # Mensagem amigável opcional quando o gráfico estiver ocultado
         st.info("O gráfico de movimentações histórica e Turnover é exibido apenas para filtros que incluam funcionários ativos 'Trabalhando' ou 'Desligados'.")
