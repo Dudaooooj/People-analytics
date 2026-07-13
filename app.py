@@ -158,7 +158,7 @@ elif aba_selecionada == "Perfil dos Colaboradores":
         renderizar_estrutura_organizacional(df_filtrado)
 
     with sub_aba[2]:
-        st.subheader("Informações Adicionais")
+        st.subheader("Atestados e Afastamentos")
         
         df_atestados_total = carregar_atestados_consolidados(arquivos_atestados_mensais)
         
