@@ -145,7 +145,7 @@ elif aba_selecionada == "Perfil dos Colaboradores":
     st.title("Perfil dos Colaboradores")
     
     # Criando sub-abas para organizar a densidade de informações
-    sub_aba = st.tabs(["Demografia & Ciclo", "Estrutura Organizacional", "Informações Adicionais"])
+    sub_aba = st.tabs(["Demografia & Ciclo", "Estrutura Organizacional", "Atestados & Afastamentos"])
     
     with sub_aba[0]:
         st.subheader("Análise Demográfica e Ciclo de Vida")
