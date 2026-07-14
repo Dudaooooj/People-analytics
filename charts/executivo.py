@@ -326,120 +326,124 @@ def renderizar_painel_executivo(df):
             demissoes_no_tempo = df_dem.groupby("Mes_Ano").size().reset_index(name="Demissões")
         
         if (not admissoes_no_tempo.empty or not demissoes_no_tempo.empty):
+            # 1. Consolidamos o histórico total primeiro
             movimentacao = pd.merge(admissoes_no_tempo, demissoes_no_tempo, on="Mes_Ano", how="outer").fillna(0)
             movimentacao = movimentacao.sort_values("Mes_Ano")
             
-            # --- FILTRO: Apenas de Janeiro/2026 em diante ---
-            movimentacao = movimentacao[movimentacao["Mes_Ano"] >= "2026-01"].reset_index(drop=True)
-            
-            # --- CÁLCULO DINÂMICO DO TOTAL DE ATIVOS EM CADA MÊS ---
+            # 2. Calculamos os ativos varrendo o histórico completo para garantir a herança de ativos de anos passados
             movimentacao["Ativos_No_Mes"] = 0
             for i, row in movimentacao.iterrows():
                 ultimo_dia = pd.to_datetime(row["Mes_Ano"]) + MonthEnd(1)
+                # Garantimos que a varredura olhe para o mesmo DataFrame filtrado (df) de forma segura
                 ativos = (
                     (df[adm_col_real] <= ultimo_dia) &
                     (df[dem_col_real].isna() | (df[dem_col_real] > ultimo_dia))
                 ).sum()
                 movimentacao.loc[i, "Ativos_No_Mes"] = ativos
             
-            # Cálculo da taxa de Turnover
+            # 3. Calculamos o Turnover histórico
             movimentacao["Turnover (%)"] = movimentacao.apply(
                 lambda r: (((r["Admissões"] + r["Demissões"]) / 2) / r["Ativos_No_Mes"] * 100) if r["Ativos_No_Mes"] > 0 else 0, 
                 axis=1
             )
-
-            # Criando rótulos amigáveis para o eixo X (Ex: "jan/26")
-            meses_map = {"01": "jan", "02": "fev", "03": "mar", "04": "abr", "05": "mai", "06": "jun",
-                         "07": "jul", "08": "ago", "09": "set", "10": "out", "11": "nov", "12": "dez"}
             
-            def formatar_mes_ano(txt):
-                ano, mes = txt.split("-")
-                return f"{meses_map[mes]}/{ano[2:]}"
+            # --- FILTRO VISUAL AQUI: Cortamos para exibir na tela apenas de Janeiro/2026 em diante ---
+            movimentacao = movimentacao[movimentacao["Mes_Ano"] >= "2026-01"].reset_index(drop=True)
+
+            if not movimentacao.empty:
+                # Criando rótulos amigáveis para o eixo X (Ex: "jan/26")
+                meses_map = {"01": "jan", "02": "fev", "03": "mar", "04": "abr", "05": "mai", "06": "jun",
+                             "07": "jul", "08": "ago", "09": "set", "10": "out", "11": "nov", "12": "dez"}
                 
-            movimentacao["Periodo_Exibicao"] = movimentacao["Mes_Ano"].apply(formatar_mes_ano)
+                def formatar_mes_ano(txt):
+                    ano, mes = txt.split("-")
+                    return f"{meses_map[mes]}/{ano[2:]}"
+                    
+                movimentacao["Periodo_Exibicao"] = movimentacao["Mes_Ano"].apply(formatar_mes_ano)
 
-            # --- CONSTRUÇÃO DO GRÁFICO MISTO CUSTOMIZADO (Plotly Graph Objects) ---
-            import plotly.graph_objects as go
-            fig = go.Figure()
+                # --- CONSTRUÇÃO DO GRÁFICO MISTO CUSTOMIZADO (Plotly Graph Objects) ---
+                import plotly.graph_objects as go
+                fig = go.Figure()
 
-            # 1. Barras de Admitidos (Eixo Y Esquerdo) - Configurado com Azul Claro / Ciano
-            # 1. Barras de Admitidos (Eixo Y Esquerdo) - Agora com o Azul Escuro Principal
-            fig.add_trace(
-                go.Bar(
-                    x=movimentacao["Periodo_Exibicao"],
-                    y=movimentacao["Admissões"],
-                    name="Admitidos",
-                    marker_color=AZUL_PRINCIPAL,  # Azul escuro corporativo para os Admitidos
-                    text=movimentacao["Admissões"],
-                    textposition="outside"
+                # 1. Barras de Admitidos (Azul Escuro Principal)
+                fig.add_trace(
+                    go.Bar(
+                        x=movimentacao["Periodo_Exibicao"],
+                        y=movimentacao["Admissões"],
+                        name="Admitidos",
+                        marker_color=AZUL_PRINCIPAL,
+                        text=movimentacao["Admissões"],
+                        textposition="outside"
+                    )
                 )
-            )
 
-            # 2. Barras de Demitidos (Eixo Y Esquerdo) - Mantido Laranja do projeto
-            fig.add_trace(
-                go.Bar(
-                    x=movimentacao["Periodo_Exibicao"],
-                    y=movimentacao["Demissões"],
-                    name="Demitidos",
-                    marker_color=LARANJA_DESTAQUE,  
-                    text=movimentacao["Demissões"],
-                    textposition="outside"
+                # 2. Barras de Demitidos (Laranja Destaque)
+                fig.add_trace(
+                    go.Bar(
+                        x=movimentacao["Periodo_Exibicao"],
+                        y=movimentacao["Demissões"],
+                        name="Demitidos",
+                        marker_color=LARANJA_DESTAQUE,  
+                        text=movimentacao["Demissões"],
+                        textposition="outside"
+                    )
                 )
-            )
 
-            # 3. Linha do Turnover Geral (Eixo Y Direito Secundário) - Mantido Roxo
-            fig.add_trace(
-                go.Scatter(
-                    x=movimentacao["Periodo_Exibicao"],
-                    y=movimentacao["Turnover (%)"],
-                    name="Turnover Geral (%)",
-                    mode="lines+markers+text",
-                    line=dict(color="#c54f00", width=3), 
-                    marker=dict(size=6),
-                    text=movimentacao["Turnover (%)"].apply(lambda x: f"{x:.1f}%" if x > 0 else ""),
-                    textposition="top center",
-                    yaxis="y2" 
+                # 3. Linha do Turnover Geral (Roxo)
+                fig.add_trace(
+                    go.Scatter(
+                        x=movimentacao["Periodo_Exibicao"],
+                        y=movimentacao["Turnover (%)"],
+                        name="Turnover Geral (%)",
+                        mode="lines+markers+text",
+                        line=dict(color="#5a3a5f", width=3), 
+                        marker=dict(size=6),
+                        text=movimentacao["Turnover (%)"].apply(lambda x: f"{x:.1f}%" if x > 0 else ""),
+                        textposition="top center",
+                        yaxis="y2" 
+                    )
                 )
-            )
 
-            # 4. Linha da Meta Fixa (Eixo Y Direito Secundário) - Agora com o Azul Claro / Ciano
-            meta_valor = 10.0
-            fig.add_trace(
-                go.Scatter(
-                    x=movimentacao["Periodo_Exibicao"],
-                    y=[meta_valor] * len(movimentacao),
-                    name="Meta",
-                    mode="lines",
-                    line=dict(color="#4ebec8", width=2, dash="solid"), # Azul claro/ciano para a linha de teto da meta
-                    yaxis="y2"
+                # 4. Linha da Meta Fixa (Azul Claro / Ciano)
+                meta_valor = 10.0
+                fig.add_trace(
+                    go.Scatter(
+                        x=movimentacao["Periodo_Exibicao"],
+                        y=[meta_valor] * len(movimentacao),
+                        name="Meta",
+                        mode="lines",
+                        line=dict(color="#4ebec8", width=2, dash="solid"),
+                        yaxis="y2"
+                    )
                 )
-            )
 
-            # --- CONFIGURAÇÃO VISUAL COMPLETA DOS DOIS EIXOS (CORRIGIDA) ---
-            fig.update_layout(
-                barmode="group", 
-                hovermode="x unified", 
-                legend=dict(orientation="h", y=1.15, x=0.2),
-                paper_bgcolor=BRANCO, 
-                plot_bgcolor=BRANCO,
-                height=480,
-                title="Movimentações Mensais: Admitidos vs Demitidos vs Turnover Geral",
-                yaxis=dict(
-                    title=dict(text="Quantidade de Colaboradores", font=dict(color=AZUL_PRINCIPAL)),
-                    tickfont=dict(color=AZUL_PRINCIPAL),
-                    gridcolor="#f0f0f0"
-                ),
-                yaxis2=dict(
-                    title=dict(text="Taxa de Turnover / Meta", font=dict(color="#5a3a5f")),
-                    tickfont=dict(color="#5a3a5f"),
-                    anchor="x",
-                    overlaying="y",
-                    side="right",
-                    ticksuffix="%",
-                    range=[0, max(movimentacao["Turnover (%)"].max() + 5, 15)]
+                # --- CONFIGURAÇÃO VISUAL COMPLETA DOS DOIS EIXOS (CORRIGIDA) ---
+                fig.update_layout(
+                    barmode="group", 
+                    hovermode="x unified", 
+                    legend=dict(orientation="h", y=1.15, x=0.2),
+                    paper_bgcolor=BRANCO, 
+                    plot_bgcolor=BRANCO,
+                    height=480,
+                    title="Movimentações Mensais: Admitidos vs Demitidos vs Turnover Geral",
+                    yaxis=dict(
+                        title=dict(text="Quantidade de Colaboradores", font=dict(color=AZUL_PRINCIPAL)),
+                        tickfont=dict(color=AZUL_PRINCIPAL),
+                        gridcolor="#f0f0f0"
+                    ),
+                    yaxis2=dict(
+                        title=dict(text="Taxa de Turnover / Meta", font=dict(color="#5a3a5f")),
+                        tickfont=dict(color="#5a3a5f"),
+                        anchor="x",
+                        overlaying="y",
+                        side="right",
+                        ticksuffix="%",
+                        range=[0, max(movimentacao["Turnover (%)"].max() + 5, 15)]
+                    )
                 )
-            )
-            st.plotly_chart(fig, width="stretch")
+                st.plotly_chart(fig, width="stretch")
+            else:
+                st.warning("Sem dados históricos para exibir a partir do filtro selecionado.")
         else:
             st.warning("Sem dados históricos de datas suficientes a partir de 2026 para gerar a linha temporal.")
     else:
