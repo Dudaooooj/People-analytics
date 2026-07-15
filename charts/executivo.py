@@ -59,13 +59,21 @@ def renderizar_painel_executivo(df):
     fora_operacao = int(situacao_series.isin(["ferias", "afastado"]).sum()) if situacao_col else 0
     desligados = int(situacao_series.isin(["desligado"]).sum()) if situacao_col else 0
 
+    # --- FILTRO PARA INDICADORES (Exclui os desligados) ---
+    # Se a coluna de situação existir, filtramos. Caso contrário, usamos o df original.
+    if situacao_col:
+        df_ativos_ou_afastados = df[situacao_series != "desligado"]
+    else:
+        df_ativos_ou_afastados = df.copy()
+
     # --- CÁLCULO DOS INDICADORES (MÉDIA, MEDIANA, TEMPO MÉDIO) ---
-    salario_col = _choose_column(df, ["Salário", "Salario", "Remuneração", "Remuneracao", "Salario Base"])
+    # Usamos o 'df_ativos_ou_afastados' em vez de 'df' para calcular os indicadores
+    salario_col = _choose_column(df_ativos_ou_afastados, ["Salário", "Salario", "Remuneração", "Remuneracao", "Salario Base"])
     media_salarial_val = "—"
     mediana_salarial_val = "—"
     
     if salario_col:
-        salarios = pd.to_numeric(df[salario_col], errors="coerce")
+        salarios = pd.to_numeric(df_ativos_ou_afastados[salario_col], errors="coerce")
         media_salarial = salarios.mean()
         mediana_salarial = salarios.median()
         if pd.notna(media_salarial):
@@ -77,8 +85,9 @@ def renderizar_painel_executivo(df):
     tenure_series = pd.Series(dtype=float)
     if adm_col_real:
         hoje = pd.to_datetime("today")
-        adm_dates = df[adm_col_real]
-        dem_dates = df[dem_col_real] if dem_col_real else pd.Series(pd.NaT, index=df.index)
+        adm_dates = df_ativos_ou_afastados[adm_col_real]
+        # Como dem_col_real não deve ter datas para quem não foi desligado, usamos hoje como fallback automático
+        dem_dates = df_ativos_ou_afastados[dem_col_real] if dem_col_real else pd.Series(pd.NaT, index=df_ativos_ou_afastados.index)
         tenure_days = (dem_dates.fillna(hoje) - adm_dates).dt.days
         tenure_years = tenure_days / 365.25
         tenure_series = tenure_years.dropna()
@@ -88,7 +97,6 @@ def renderizar_painel_executivo(df):
     
     # INTERFACE GRÁFICA REESTRUTURADA E PERSONALIZADA COM CORES
 
-    
     st.markdown("---")
 
     # --- CÁLCULO DE PORCENTAGENS DOS KPIS ---
